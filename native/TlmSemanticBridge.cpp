@@ -19,7 +19,9 @@ using MethodInfo = void;
 using FieldInfo = void;
 
 HANDLE g_mapping = nullptr;
-SharedBlock* g_shared = nullptr;\n\ntemplate <class T, size_t N> constexpr size_t ArrayCount(T (&)[N]) noexcept { return N; }
+SharedBlock* g_shared = nullptr;
+
+template <class T, size_t N> constexpr size_t ArrayCount(T (&)[N]) noexcept { return N; }
 
 template<class T> bool Resolve(HMODULE m, const char* name, T& out) {
     FARPROC p = GetProcAddress(m, name); out = nullptr; if (!p) return false;
