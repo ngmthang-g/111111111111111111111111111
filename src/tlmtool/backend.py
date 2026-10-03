@@ -114,6 +114,29 @@ class TlmBackend:
         finally:
             self.gate.leave(gw.pid)
 
+    def _semantic(self, gw: GameWindow, call: Callable[[], ActionResult]) -> ActionResult:
+        if not self.gate.try_enter(gw.pid):
+            return ActionResult(False, "PID đang có một lệnh thay đổi trạng thái")
+        try:
+            return call()
+        finally:
+            self.gate.leave(gw.pid)
+
+    def party_create(self, gw: GameWindow) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.party_create(gw))
+
+    def party_leave(self, gw: GameWindow) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.party_leave(gw))
+
+    def party_invite(self, gw: GameWindow, target_role_id: int) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.party_invite(gw, target_role_id))
+
+    def party_join(self, gw: GameWindow, leader_role_id: int) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.party_join(gw, leader_role_id))
+
+    def revive_normal(self, gw: GameWindow) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.revive_normal(gw))
+
 
 class SemanticDriver:
     """Windows semantic bridge adapter.
