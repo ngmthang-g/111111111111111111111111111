@@ -43,6 +43,10 @@ class LocalRoleSnapshot:
     y: int = 0
     is_dead: bool = False
     is_riding: bool = False
+    auto_pathing: bool = False
+    auto_fight: bool = False
+    free_bag_space: int = -1
+    waiting_change_map: bool = False
     is_moving: bool = False
     is_busy: bool = False
     is_progress: bool = False
