@@ -210,9 +210,9 @@ const MethodInfo* BagItemAtSiteMethod(const Classes&c){
 }
 bool LooksLikeBagItemObject(Il2CppObject*object){
     if(!object)return false;Il2CppClass*k=g_api.object_get_class(object);if(!k)return false;
-    return FindField(k,"ID")||FindMethod(k,"get_ID",0,false)
-        ? (FindField(k,"ItemID")||FindMethod(k,"get_ItemID",0,false))!=nullptr
-        : false;
+    const bool hasId=FindField(k,"ID")!=nullptr||FindMethod(k,"get_ID",0,false)!=nullptr;
+    const bool hasItemId=FindField(k,"ItemID")!=nullptr||FindMethod(k,"get_ItemID",0,false)!=nullptr;
+    return hasId&&hasItemId;
 }
 bool TryUnwrapBagEnumeratorCurrent(Il2CppObject*current,Il2CppObject*&item){
     item=nullptr;if(!current)return true;if(LooksLikeBagItemObject(current)){item=current;return true;}
