@@ -128,6 +128,25 @@ class WindowsApi:
             return None
         return Rect(r.left, r.top, r.right, r.bottom)
 
+    def window_rect(self, hwnd: int) -> Rect | None:
+        if not self.available or not hwnd:
+            return None
+        r = wintypes.RECT()
+        if not self.user32.GetWindowRect(hwnd, ctypes.byref(r)):
+            return None
+        return Rect(r.left, r.top, r.right, r.bottom)
+
+    def move_keep_size(self, hwnd: int, x: int, y: int) -> bool:
+        if not self.available or not hwnd:
+            return False
+        rect = self.window_rect(hwnd)
+        if not rect:
+            return False
+        return bool(self.user32.SetWindowPos(
+            hwnd, 0, x, y, rect.width, rect.height,
+            self.SWP_NOZORDER | self.SWP_NOACTIVATE,
+        ))
+
     def screen_size(self) -> tuple[int, int]:
         if not self.available:
             return (1920, 1080)
