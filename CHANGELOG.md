@@ -29,3 +29,15 @@
 - Finish Login proxy/update-popup/captcha-manual path.
 - Runtime-build/attach proof for bridge.
 - Implement Party then Train engines in task order.
+
+
+### Continued implementation — 2026-10-03
+- Fixed the native bridge source regression caused by literal newline escapes.
+- CI now builds TlmSemanticBridge.dll and the Nuitka Windows standalone distribution successfully.
+- Corrected Start window hiding to TLM's off-screen move behavior and corrected tight/diagonal stacking semantics.
+- Expanded Login to the recovered 100-row scrolling model, captcha mode selector, batch launch/login proof and after-login dispatch.
+- Extended snapshots with TeamID/profile/vitals fields.
+- Added exact create/leave/invite/join Party packet primitives and normal revive type=1.
+- Rebuilt Party groups with six account selectors, leader-at-first-slot semantics, concurrent group creation and TeamID state proof.
+
+Runtime remains **UNTESTED** against the frozen game client; build success is not promoted to runtime success.
