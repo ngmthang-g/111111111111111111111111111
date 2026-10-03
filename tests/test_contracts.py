@@ -93,3 +93,21 @@ def test_train_core_is_orchestrated_not_generic_action_only():
     assert 'start_bar(self, self._toggle_farm)' in block
     assert "lambda:self.action_all(Action.TRAIN)" not in block
     assert "ARRIVE_TOLERANCE = 40" in block
+
+
+def test_native_bag_and_sell_surface_is_implemented():
+    text = (Path(__file__).parents[1] / "native/TlmSemanticBridge.cpp").read_text(encoding="utf-8")
+    for case in ["ReadBagPage", "SellBagItem"]:
+        assert f"case Command::{case}" in text
+    assert "NPCShop_SellItemTab" in text
+    assert "RequestSellItem" in text
+    assert "Item quest-family; chặn bán" in text
+
+
+def test_semantic_driver_exposes_fresh_bag_sell_contract():
+    text = (Path(__file__).parents[1] / "src/tlmtool/backend.py").read_text(encoding="utf-8")
+    assert "def read_bag_page" in text
+    assert "def sell_bag_item" in text
+    assert "Command.READ_BAG_PAGE" in text
+    assert "Command.SELL_BAG_ITEM" in text
+    assert "def _split_i64" in text
