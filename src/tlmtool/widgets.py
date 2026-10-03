@@ -41,8 +41,9 @@ def labeled_combo(parent: tk.Widget, label: str, values: Iterable[str], row: int
     return cb
 
 
-def account_table_header(parent: tk.Widget, headers: list[tuple[str, int]], row=0):
-    for col, (text, width) in enumerate(headers):
+def account_table_header(parent: tk.Widget, headers: list[tuple[str, int]], row=0, start_col=0):
+    for offset, (text, width) in enumerate(headers):
+        col = start_col + offset
         tk.Label(parent, text=text, bg=BG, font=("Segoe UI", 9, "bold"), width=width, anchor="center").grid(
             row=row, column=col, sticky="ew", padx=1
         )
