@@ -191,3 +191,29 @@ def test_tlm_color_compare_uses_percentage_tolerance():
     assert WindowsApi.color_compare((100, 100, 100), (100, 100, 100), 0)
     assert WindowsApi.color_compare((95, 100, 100), (100, 100, 100), 5)
     assert not WindowsApi.color_compare((94, 100, 100), (100, 100, 100), 5)
+
+
+def test_train_fast_sell_uses_recovered_tlm_pixel_sequence():
+    text = (Path(__file__).parents[1] / "src/tlmtool/app.py").read_text(encoding="utf-8")
+    start = text.index("class TrainTab(BaseTab):")
+    end = text.index("class TrainLsvTab(BaseTab):", start)
+    block = text[start:end]
+    for token in [
+        "SELL_OPEN_CLICKS", "SELL_CONFIRM_STEPS", "sell_slot_pixel",
+        "SELL_SLOT_CHECK_TIMEOUT", "SELL_SLOT_CHECK_INTERVAL",
+        "SELL_SLOT_TICK_SECONDS", "SELL_MAX_SLOT_CLICKS",
+        "def _click_until_pixel", "def _sell_worker",
+    ]:
+        assert token in block
+    assert "self.backend.winapi.send_click" in block
+    assert "self.backend.sell_open_shop" not in block
+
+
+def test_train_sell_button_is_no_longer_placeholder():
+    text = (Path(__file__).parents[1] / "src/tlmtool/app.py").read_text(encoding="utf-8")
+    start = text.index("    def _sell_all_pending(self):")
+    end = text.index("    def _toggle_single_farm", start)
+    block = text[start:end]
+    assert "threading.Thread" in block
+    assert "target=self._sell_worker" in block
+    assert "đang chờ port primitive bag/shop" not in block
