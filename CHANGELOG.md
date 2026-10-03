@@ -41,3 +41,14 @@
 - Rebuilt Party groups with six account selectors, leader-at-first-slot semantics, concurrent group creation and TeamID state proof.
 
 Runtime remains **UNTESTED** against the frozen game client; build success is not promoted to runtime success.
+
+
+### Continued implementation — Train core
+- Corrected Login and Party post-dispatch to invoke the target tab workflow instead of the generic Action enum.
+- Post-login now waits for the target tab account scan before auto-start, matching the recovered TLM control flow.
+- Implemented Train saved-coordinate rows backed by DATA-2222 map catalog.
+- Implemented live per-window Train account rows with persisted sell/train coordinate selections.
+- Implemented state-proven move-to-train and AutoFight controls.
+- Implemented the first Train lifecycle: move -> arrival proof -> fight -> AutoFight proof -> normal revive -> return to spot.
+- Full-bag and periodic-town conditions stop fail-closed until sell/shop primitives are ported.
+- No live game-runtime success is claimed; Windows build remains the only proven execution layer.
