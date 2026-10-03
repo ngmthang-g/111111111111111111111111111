@@ -131,6 +131,13 @@ bool SendNetworkPacket(const Classes&c,int32_t packetID,const std::string&payloa
     Il2CppString*s=g_api.string_new(payload.c_str());if(!s){SetText(d,cap,L"Không tạo được packet payload");return false;}
     void*args[]={&packetID,&s};return InvokeVoid(m,nullptr,args,d,cap);
 }
+bool PartyCreate(wchar_t*d,size_t cap){
+    Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;
+    Il2CppObject*o=nullptr;Il2CppClass*k=nullptr;if(!Leader(c,o,k,d,cap))return false;
+    int32_t team=0;if(GetterI32(k,"get_TeamID",o,team,d,cap)&&team>0&&team!=-1){SetText(d,cap,L"Đã có tổ đội");return true;}
+    if(!SendNetworkPacket(c,200057,"0",d,cap))return false;
+    SetText(d,cap,L"Đã gửi tạo đội action=0");return true;
+}
 bool PartyLeave(wchar_t*d,size_t cap){
     Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;
     Il2CppObject*o=nullptr;Il2CppClass*k=nullptr;if(!Leader(c,o,k,d,cap))return false;
@@ -177,6 +184,7 @@ void ProcessRequest(){
         case Command::ClickNpc: ok=ClickNpc(g_shared->request.arg0,detail,ArrayCount(detail));break;
         case Command::StartAutoFight: ok=AutoFight(true,detail,ArrayCount(detail));break;
         case Command::StopAutoFight: ok=AutoFight(false,detail,ArrayCount(detail));break;
+        case Command::PartyCreate: ok=PartyCreate(detail,ArrayCount(detail));break;
         case Command::PartyLeave: ok=PartyLeave(detail,ArrayCount(detail));break;
         case Command::PartyInvite: ok=PartyInvite(g_shared->request.arg0,detail,ArrayCount(detail));break;
         case Command::PartyJoin: ok=PartyJoin(g_shared->request.arg0,detail,ArrayCount(detail));break;
