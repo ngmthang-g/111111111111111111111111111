@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <climits>
 #include <cstring>
+#include <string>
 #include "protocol.h"
 
 using namespace cleanroute;
@@ -80,10 +81,11 @@ bool InvokeVoid(const MethodInfo*m,void*self,void**args,wchar_t*d,size_t cap){Il
 bool InvokeI32(const MethodInfo*m,void*self,void**args,int32_t&out,wchar_t*d,size_t cap){Il2CppObject*o=nullptr;if(!InvokeObj(m,self,args,o,d,cap)||!o)return false;void*p=g_api.object_unbox(o);if(!p)return false;out=*reinterpret_cast<int32_t*>(p);return true;}
 bool GetterI32(Il2CppClass*c,const char*name,void*self,int32_t&out,wchar_t*d,size_t cap){return InvokeI32(FindMethod(c,name,0,false),self,nullptr,out,d,cap);}
 
-struct Classes {Il2CppClass* game=nullptr;Il2CppClass* shared=nullptr;Il2CppClass* session=nullptr;Il2CppClass* autoPath=nullptr;Il2CppClass* gui=nullptr;};
+struct Classes {Il2CppClass* game=nullptr;Il2CppClass* network=nullptr;Il2CppClass* shared=nullptr;Il2CppClass* session=nullptr;Il2CppClass* autoPath=nullptr;Il2CppClass* gui=nullptr;};
 bool ResolveClasses(Classes&c,wchar_t*d,size_t cap){
     auto*img=AssemblyImage(d,cap); if(!img)return false;
     c.game=g_api.class_from_name(img,"FGStudio.LuaSystem.API","LuaSystemAPI_Game");
+    c.network=g_api.class_from_name(img,"FGStudio.LuaSystem.API","LuaSystemAPI_Network");
     c.gui=g_api.class_from_name(img,"FGStudio.LuaSystem.API","LuaSystemAPI_GUI");
     c.shared=g_api.class_from_name(img,"FGStudio.LuaSystem","LuaSystemSharedData");
     c.session=g_api.class_from_name(img,"FGStudio.Game.Logic","SessionData");
@@ -106,12 +108,15 @@ bool ReadState(Snapshot&s,wchar_t*d,size_t cap){
     if(!GetterI32(k,"get_MapID",o,map,d,cap)||map<=0)return false;
     if(!GetterI32(k,"get_PosX",o,x,d,cap)||!GetterI32(k,"get_PosY",o,y,d,cap)){SetText(d,cap,L"Không đọc được PosX/PosY");return false;}
     if(!GetterI32(k,"get_IsRiding",o,riding,d,cap))riding=0;s.roleID=role;s.mapID=map;s.x=x;s.y=y;s.riding=riding?1:0;s.validMask|=ValidIdentity|ValidMap|ValidPosition|ValidRiding;
+    int32_t team=0;if(GetterI32(k,"get_TeamID",o,team,d,cap)){s.teamID=team;s.validMask|=ValidTeam;}
+    int32_t level=0,faction=0;if(GetterI32(k,"get_Level",o,level,d,cap)){s.level=level;s.validMask|=ValidProfile;}if(GetterI32(k,"get_FactionID",o,faction,d,cap)){s.factionID=faction;s.validMask|=ValidProfile;}
+    int32_t hp=0,maxHP=0;if(GetterI32(k,"get_HP",o,hp,d,cap)&&GetterI32(k,"get_MaxHP",o,maxHP,d,cap)){s.hp=hp;s.maxHP=maxHP;s.validMask|=ValidVitals;}
     int32_t dead=0;if(GetterI32(k,"get_IsDeath",o,dead,d,cap)){s.dead=dead?1:0;s.validMask|=ValidLifeState;}
     int32_t autoFlag=1;if(InvokeI32(FindMethod(c.game,"get_EnableAutoF1",0,true),nullptr,nullptr,autoFlag,d,cap)){s.autoFight=autoFlag?0:1;s.validMask|=ValidAutoFight;}
     int32_t freeBag=-1;if(InvokeI32(FindMethod(c.game,"GetFreeBagSpace",0,true),nullptr,nullptr,freeBag,d,cap)&&freeBag>=0){s.freeBagSpace=freeBag;s.validMask|=ValidBagSpace;}
     auto*instM=FindMethod(c.autoPath,"get_Instance",0,true);Il2CppObject*ap=nullptr;if(InvokeObj(instM,nullptr,nullptr,ap,d,cap)&&ap){auto*ac=g_api.object_get_class(ap);int32_t path=0;if(GetterI32(ac,"get_IsAutoPathing",ap,path,d,cap)){s.autoPathing=path?1:0;s.validMask|=ValidAutoPath;}}
     if(auto*nm=FindMethod(k,"get_Name",0,false)){Il2CppObject*no=nullptr;if(InvokeObj(nm,o,nullptr,no,d,cap)&&no){auto*str=reinterpret_cast<Il2CppString*>(no);int n=g_api.string_length(str);const wchar_t*ch=g_api.string_chars(str);if(ch){int lim=n<63?n:63;for(int i=0;i<lim;++i)s.characterName[i]=ch[i];s.characterName[lim]=0;}}}
-    SetText(d,cap,L"STATE map=");AppendInt(d,cap,s.mapID);Append(d,cap,L" pos=");AppendInt(d,cap,s.x);Append(d,cap,L",");AppendInt(d,cap,s.y);return true;
+    SetText(d,cap,L"STATE role=");AppendInt(d,cap,s.roleID);Append(d,cap,L" team=");AppendInt(d,cap,s.teamID);Append(d,cap,L" map=");AppendInt(d,cap,s.mapID);Append(d,cap,L" pos=");AppendInt(d,cap,s.x);Append(d,cap,L",");AppendInt(d,cap,s.y);return true;
 }
 bool StartPath(int map,int x,int y,wchar_t*d,size_t cap){Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;Il2CppObject*ap=nullptr;if(!InvokeObj(FindMethod(c.autoPath,"get_Instance",0,true),nullptr,nullptr,ap,d,cap)||!ap)return false;auto*k=g_api.object_get_class(ap);auto*m=FindMethod(k,"StartAutoPath",3,false);int32_t a=map,b=x,cc=y;void*args[]={&a,&b,&cc};if(!InvokeVoid(m,ap,args,d,cap))return false;SetText(d,cap,L"Đã gửi AutoPath");return true;}
 bool StopPath(wchar_t*d,size_t cap){Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;if(!InvokeVoid(FindMethod(c.game,"StopAutoPath",0,true),nullptr,nullptr,d,cap))return false;SetText(d,cap,L"Đã gửi StopAutoPath");return true;}
@@ -119,6 +124,40 @@ bool ClickNpc(int id,wchar_t*d,size_t cap){Classes c{};if(!ResolveClasses(c,d,ca
 bool ToggleRide(bool desired,wchar_t*d,size_t cap){Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;Il2CppObject*o=nullptr;Il2CppClass*k=nullptr;if(!Leader(c,o,k,d,cap))return false;int32_t riding=0;if(!GetterI32(k,"get_IsRiding",o,riding,d,cap))return false;if((riding!=0)==desired){SetText(d,cap,L"Ride state đã đúng");return true;}int32_t slot=0;if(!InvokeI32(FindMethod(c.game,"get_CurrentMountSlot",0,true),nullptr,nullptr,slot,d,cap))return false;void*args[]={&slot};if(!InvokeVoid(FindMethod(c.game,"SendToggleRideState",1,true),nullptr,args,d,cap))return false;SetText(d,cap,L"Đã gửi ToggleRide");return true;}
 bool FindUi(const Classes&c,const char*name,Il2CppObject*&ui,wchar_t*d,size_t cap){if(!c.gui){SetText(d,cap,L"LuaSystemAPI_GUI chưa resolve");return false;}auto*m=FindMethod(c.gui,"FindUI",1,true);if(!m)m=FindMethod(c.gui,"MainFindUI",1,true);if(!m)return false;Il2CppString*s=g_api.string_new(name);void*args[]={&s};return InvokeObj(m,nullptr,args,ui,d,cap)&&ui;}
 bool AutoFight(bool start,wchar_t*d,size_t cap){Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;Il2CppObject*ui=nullptr;if(!FindUi(c,"AutoFight_Main",ui,d,cap))return false;auto*k=g_api.object_get_class(ui);auto*m=FindMethod(k,"StartAutoFight",1,false);if(!m){SetText(d,cap,L"StartAutoFight không phải managed method trên UI build này");return false;}int32_t mode=start?1:0;void*args[]={&mode};if(!InvokeVoid(m,ui,args,d,cap))return false;SetText(d,cap,start?L"Đã StartAutoFight(Train)":L"Đã StopAutoFight");return true;}
+
+bool SendNetworkPacket(const Classes&c,int32_t packetID,const std::string&payload,wchar_t*d,size_t cap){
+    if(!c.network){SetText(d,cap,L"Thiếu LuaSystemAPI_Network");return false;}
+    auto*m=FindMethod(c.network,"SendPacket",2,true);if(!m){SetText(d,cap,L"Không resolve Network.SendPacket(Int32,String)");return false;}
+    Il2CppString*s=g_api.string_new(payload.c_str());if(!s){SetText(d,cap,L"Không tạo được packet payload");return false;}
+    void*args[]={&packetID,&s};return InvokeVoid(m,nullptr,args,d,cap);
+}
+bool PartyLeave(wchar_t*d,size_t cap){
+    Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;
+    Il2CppObject*o=nullptr;Il2CppClass*k=nullptr;if(!Leader(c,o,k,d,cap))return false;
+    int32_t role=0,team=0;if(!GetterI32(k,"get_RoleID",o,role,d,cap)||role<=0)return false;
+    if(GetterI32(k,"get_TeamID",o,team,d,cap)&&team<=0){SetText(d,cap,L"Không ở trong tổ đội");return true;}
+    if(!SendNetworkPacket(c,200057,std::string("4:")+std::to_string(role),d,cap))return false;
+    SetText(d,cap,L"Đã gửi rời đội 4:selfRoleID");return true;
+}
+bool PartyInvite(int32_t targetRoleID,wchar_t*d,size_t cap){
+    if(targetRoleID<=0){SetText(d,cap,L"RoleID mời không hợp lệ");return false;}
+    Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;
+    if(!SendNetworkPacket(c,200051,std::string("5:")+std::to_string(targetRoleID),d,cap))return false;
+    SetText(d,cap,L"Đã gửi mời đội 5:targetRoleID");return true;
+}
+bool PartyJoin(int32_t targetRoleID,wchar_t*d,size_t cap){
+    if(targetRoleID<=0){SetText(d,cap,L"RoleID trưởng nhóm không hợp lệ");return false;}
+    Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;
+    if(!SendNetworkPacket(c,200051,std::string("9:")+std::to_string(targetRoleID),d,cap))return false;
+    SetText(d,cap,L"Đã gửi xin vào đội 9:targetRoleID");return true;
+}
+bool ReviveNormal(wchar_t*d,size_t cap){
+    Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;
+    Il2CppObject*o=nullptr;Il2CppClass*k=nullptr;if(!Leader(c,o,k,d,cap))return false;
+    int32_t dead=0;if(!GetterI32(k,"get_IsDeath",o,dead,d,cap)||!dead){SetText(d,cap,L"Không Đầu thai vì nhân vật chưa chết");return false;}
+    if(!SendNetworkPacket(c,200063,"1",d,cap))return false;
+    SetText(d,cap,L"Đã gửi Đầu thai type=1");return true;
+}
 
 bool EnsureShared(){
     if(g_shared)return true;wchar_t name[96]{};MappingName(GetCurrentProcessId(),name,ArrayCount(name));g_mapping=OpenFileMappingW(FILE_MAP_ALL_ACCESS,FALSE,name);if(!g_mapping)return false;
@@ -138,6 +177,11 @@ void ProcessRequest(){
         case Command::ClickNpc: ok=ClickNpc(g_shared->request.arg0,detail,ArrayCount(detail));break;
         case Command::StartAutoFight: ok=AutoFight(true,detail,ArrayCount(detail));break;
         case Command::StopAutoFight: ok=AutoFight(false,detail,ArrayCount(detail));break;
+        case Command::PartyLeave: ok=PartyLeave(detail,ArrayCount(detail));break;
+        case Command::PartyInvite: ok=PartyInvite(g_shared->request.arg0,detail,ArrayCount(detail));break;
+        case Command::PartyJoin: ok=PartyJoin(g_shared->request.arg0,detail,ArrayCount(detail));break;
+        case Command::Revive:
+        case Command::ReviveNormal: ok=ReviveNormal(detail,ArrayCount(detail));break;
         default: SetText(detail,ArrayCount(detail),L"Command chưa được port trong T04 core bridge");break;
     }}
     r.ok=ok?1:0;SetText(r.detail,ArrayCount(r.detail),detail);g_shared->response=r;MemoryBarrier();InterlockedExchange(&g_shared->completedSeq,seq);InterlockedExchange(&g_shared->bridgeBusy,0);
