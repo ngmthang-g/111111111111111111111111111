@@ -481,25 +481,411 @@ def checks(parent, texts):
 
 
 class PartyTab(BaseTab):
-    def __init__(self,master,app):
-        super().__init__(master,app)
-        post=labelframe(self,"Sau khi party"); post.pack(fill="x",padx=5,pady=(5,2))
-        row=tk.Frame(post,bg=BG); row.pack(fill="x",padx=4,pady=3); tk.Label(row,text="Sau khi party:",bg=BG,font=("Segoe UI",9,"bold")).pack(side="left")
-        self.after=tk.StringVar(value="Chờ")
-        for x in ["Chờ","Train","Train LSV","Dồn vàng","Phó bản"]: tk.Radiobutton(row,text=x,value=x,variable=self.after,bg=BG).pack(side="left",padx=3)
-        ready=labelframe(self,"Cấu hình tổ đội"); ready.pack(fill="x",padx=5,pady=2); tk.Label(ready,text="Danh sách acc sẵn sàng:",bg=BG,font=("Segoe UI",9,"bold"),anchor="w").pack(fill="x",padx=4,pady=4)
-        groups=labelframe(self,"Cấu hình nhóm"); groups.pack(fill="x",padx=5,pady=2); self.holder=tk.Frame(groups,bg=BG); self.holder.pack(fill="x",padx=4); self.groups=[]
-        self.add_group(); self.add_group(); button(groups,"+ Thêm nhóm",self.add_group,"green").pack(anchor="w",padx=4,pady=6); start_bar(self,lambda:self.action_all(Action.PARTY))
-    def add_group(self):
-        n=len(self.groups)+1; f=tk.LabelFrame(self.holder,text=f"Nhóm {n}",bg=BG,font=("Segoe UI",9,"bold")); f.pack(fill="x",pady=2)
-        top=tk.Frame(f,bg=BG); top.pack(fill="x"); tk.Label(top,text="Trưởng nhóm:",bg=BG,font=("Segoe UI",9,"bold")).pack(side="left",padx=4); ttk.Combobox(top,width=17).pack(side="left")
-        button(top,"Rời nhóm",lambda:self.action_all(Action.PARTY),"blue").pack(side="right",padx=2); button(top,"✕ Xóa nhóm",lambda:self.delete_group(f),"red").pack(side="right",padx=2)
-        grid=tk.Frame(f,bg=BG); grid.pack(fill="x",padx=4,pady=2)
-        for r in range(2):
-            for c in range(3): ttk.Combobox(grid,width=15).grid(row=r,column=c,padx=2,pady=2)
-        button(f,f"▾ Tạo nhóm {n}",lambda:self.action_all(Action.PARTY),"green").pack(fill="x",padx=4,pady=(2,5)); self.groups.append(f)
-    def delete_group(self,f):
-        if len(self.groups)>1: f.destroy(); self.groups.remove(f)
+    MAX_GROUP_MEMBERS = 6
+
+    def __init__(self, master, app):
+        super().__init__(master, app)
+        self._runtime: dict[str, tuple[object, object]] = {}
+        self._refresh_busy = False
+        self._closed = False
+        self._batch_running = False
+        self._batch_cancel = threading.Event()
+        self.groups: list[dict[str, object]] = []
+
+        post = labelframe(self, "Sau khi party")
+        post.pack(fill="x", padx=5, pady=(5, 2))
+        row = tk.Frame(post, bg=BG)
+        row.pack(fill="x", padx=4, pady=3)
+        tk.Label(row, text="Sau khi party:", bg=BG, font=("Segoe UI", 9, "bold")).pack(side="left")
+        self.after = tk.StringVar(value=self.store.get("party", "after", "Chờ"))
+        for x in ["Chờ", "Train", "Train LSV", "Dồn vàng", "Phó bản"]:
+            tk.Radiobutton(
+                row, text=x, value=x, variable=self.after, bg=BG,
+                command=self.save_config,
+            ).pack(side="left", padx=3)
+
+        ready = labelframe(self, "Cấu hình tổ đội")
+        ready.pack(fill="x", padx=5, pady=2)
+        self.ready_label = tk.Label(
+            ready, text="Danh sách acc sẵn sàng:", bg=BG,
+            font=("Segoe UI", 9, "bold"), anchor="w", justify="left",
+        )
+        self.ready_label.pack(fill="x", padx=4, pady=4)
+
+        groups = labelframe(self, "Cấu hình nhóm")
+        groups.pack(fill="x", padx=5, pady=2)
+        self.holder = tk.Frame(groups, bg=BG)
+        self.holder.pack(fill="x", padx=4)
+
+        saved = self.store.get_json("party", "groups", [])
+        if not isinstance(saved, list) or not saved:
+            saved = [["", "", "", "", "", ""], ["", "", "", "", "", ""]]
+        for members in saved:
+            if isinstance(members, list):
+                self.add_group(members)
+        if not self.groups:
+            self.add_group()
+        button(groups, "+ Thêm nhóm", self.add_group, "green").pack(anchor="w", padx=4, pady=6)
+
+        self.start_button = start_bar(self, self.toggle_run)
+        self.after(250, self._schedule_refresh)
+
+    def _schedule_refresh(self):
+        if self._closed:
+            return
+        if not self._refresh_busy:
+            self._refresh_busy = True
+            threading.Thread(target=self._refresh_worker, name="tlm-party-scan", daemon=True).start()
+        self.after(3000, self._schedule_refresh)
+
+    def _refresh_worker(self):
+        catalog: dict[str, tuple[object, object]] = {}
+        try:
+            for gw in self.backend.windows():
+                if self._closed:
+                    return
+                snap = self.backend.driver.read_snapshot(gw)
+                if not snap or snap.role_id <= 0 or not snap.name:
+                    continue
+                catalog[snap.name.strip()] = (gw, snap)
+        finally:
+            if not self._closed:
+                self.after(0, lambda data=catalog: self._apply_runtime(data))
+
+    def _apply_runtime(self, catalog):
+        self._runtime = catalog
+        self._refresh_busy = False
+        names = sorted(catalog, key=str.casefold)
+        suffix = ", ".join(names) if names else ""
+        self.ready_label.config(text="Danh sách acc sẵn sàng:" + (f" {suffix}" if suffix else ""))
+        for gd in self.groups:
+            for cb in gd["combos"]:
+                cb.configure(values=names)
+
+    def add_group(self, members=None):
+        n = len(self.groups) + 1
+        frame = tk.LabelFrame(self.holder, text=f"Nhóm {n}", bg=BG, font=("Segoe UI", 9, "bold"))
+        frame.pack(fill="x", pady=2)
+
+        top = tk.Frame(frame, bg=BG)
+        top.pack(fill="x")
+        tk.Label(top, text="Trưởng nhóm:", bg=BG, font=("Segoe UI", 9, "bold")).pack(side="left", padx=(4, 2))
+        leader_label = tk.Label(top, text="(chưa chọn)", bg=BG, fg=GRAY)
+        leader_label.pack(side="left")
+        button(top, "✕ Xóa nhóm", lambda f=frame: self.delete_group(f), "red").pack(side="right", padx=2)
+        button(top, "Rời nhóm", lambda f=frame: self.leave_group(f), "blue").pack(side="right", padx=2)
+
+        grid = tk.Frame(frame, bg=BG)
+        grid.pack(fill="x", padx=4, pady=2)
+        vars_, combos = [], []
+        src = list(members or [])[:self.MAX_GROUP_MEMBERS]
+        src += [""] * (self.MAX_GROUP_MEMBERS - len(src))
+        for i in range(self.MAX_GROUP_MEMBERS):
+            var = tk.StringVar(value=src[i])
+            cb = ttk.Combobox(grid, textvariable=var, width=15, state="readonly", values=sorted(self._runtime))
+            cb.grid(row=i // 3, column=i % 3, padx=2, pady=2, sticky="ew")
+            cb.bind("<<ComboboxSelected>>", lambda _e, f=frame: self._group_changed(f))
+            vars_.append(var)
+            combos.append(cb)
+        for col in range(3):
+            grid.grid_columnconfigure(col, weight=1)
+
+        run_btn = button(frame, f"▾ Tạo nhóm {n}", lambda f=frame: self.run_single(f), "green")
+        run_btn.pack(fill="x", padx=4, pady=(2, 5))
+        gd = {
+            "frame": frame, "vars": vars_, "combos": combos,
+            "leader_label": leader_label, "run_btn": run_btn,
+            "cancel": threading.Event(), "running": False,
+        }
+        self.groups.append(gd)
+        self._group_changed(frame, save=False)
+        self._renumber_groups()
+        self.save_config()
+
+    def _group_for_frame(self, frame):
+        for gd in self.groups:
+            if gd["frame"] is frame:
+                return gd
+        return None
+
+    def _group_changed(self, frame, save=True):
+        gd = self._group_for_frame(frame)
+        if not gd:
+            return
+        leader = gd["vars"][0].get().strip()
+        gd["leader_label"].config(text=leader or "(chưa chọn)", fg="#1565c0" if leader else GRAY)
+        if save:
+            self.save_config()
+
+    def _renumber_groups(self):
+        for i, gd in enumerate(self.groups, 1):
+            gd["frame"].config(text=f"Nhóm {i}")
+            if not gd["running"]:
+                gd["run_btn"].config(text=f"▾ Tạo nhóm {i}")
+
+    def delete_group(self, frame):
+        if len(self.groups) <= 1:
+            return
+        gd = self._group_for_frame(frame)
+        if not gd:
+            return
+        gd["cancel"].set()
+        frame.destroy()
+        self.groups.remove(gd)
+        self._renumber_groups()
+        self.save_config()
+
+    def _members(self, gd):
+        out = []
+        seen = set()
+        for var in gd["vars"]:
+            name = var.get().strip()
+            key = name.casefold()
+            if name and key not in seen:
+                seen.add(key)
+                out.append(name)
+        return out
+
+    def save_config(self):
+        self.store.set("party", "after", self.after.get())
+        self.store.set("party", "groups", [[v.get() for v in gd["vars"]] for gd in self.groups])
+        self.store.save()
+
+    def _fresh_catalog(self):
+        catalog = {}
+        for gw in self.backend.windows():
+            snap = self.backend.driver.read_snapshot(gw)
+            if snap and snap.role_id > 0 and snap.name:
+                catalog[snap.name.strip().casefold()] = (gw, snap)
+        return catalog
+
+    def _wait_snapshot(self, gw, predicate, timeout, cancel):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline and not cancel.is_set() and not self._batch_cancel.is_set():
+            snap = self.backend.driver.read_snapshot(gw)
+            if snap and predicate(snap):
+                return snap
+            time.sleep(.25)
+        return None
+
+    def _leave_members(self, names, cancel):
+        catalog = self._fresh_catalog()
+        targets = []
+        for name in names:
+            item = catalog.get(name.casefold())
+            if not item:
+                continue
+            gw, snap = item
+            targets.append((name, gw))
+            if snap.team_id not in (0, -1):
+                result = self.backend.party_leave(gw)
+                if not result.ok:
+                    self.app.root.after(0, lambda t=result.detail: self.app.set_status(t))
+        ok = True
+        for name, gw in targets:
+            if cancel.is_set() or self._batch_cancel.is_set():
+                return False
+            snap = self._wait_snapshot(gw, lambda s: s.team_id in (0, -1), 8.0, cancel)
+            if not snap:
+                ok = False
+                self.app.root.after(0, lambda n=name: self.app.set_status(f"[Party] {n}: chưa xác nhận đã rời đội."))
+        return ok
+
+    def leave_group(self, frame):
+        gd = self._group_for_frame(frame)
+        if not gd:
+            return
+        names = self._members(gd)
+        if not names:
+            self.app.set_status("[Party] chưa chọn acc nào.")
+            return
+        cancel = threading.Event()
+        threading.Thread(
+            target=lambda: self._leave_members(names, cancel),
+            name="tlm-party-leave", daemon=True,
+        ).start()
+
+    def run_single(self, frame):
+        gd = self._group_for_frame(frame)
+        if not gd:
+            return
+        if gd["running"]:
+            gd["cancel"].set()
+            return
+        names = self._members(gd)
+        if not names or not gd["vars"][0].get().strip():
+            self.app.set_status("[Party] phải chọn trưởng nhóm ở ô đầu tiên.")
+            return
+        gd["cancel"].clear()
+        gd["running"] = True
+        gd["run_btn"].config(text="■ Dừng nhóm", bg="#d12228")
+        threading.Thread(
+            target=self._single_worker, args=(gd, names),
+            name="tlm-party-single", daemon=True,
+        ).start()
+
+    def _single_worker(self, gd, names):
+        try:
+            ok = self._run_group(names, gd["cancel"])
+            if ok:
+                self.app.root.after(0, lambda: self.app.set_status(f"[Party] Hoàn tất: {', '.join(names)}"))
+        finally:
+            self.app.root.after(0, lambda: self._reset_group_button(gd))
+
+    def _reset_group_button(self, gd):
+        gd["running"] = False
+        idx = self.groups.index(gd) + 1 if gd in self.groups else 0
+        if idx:
+            gd["run_btn"].config(text=f"▾ Tạo nhóm {idx}", bg=GREEN)
+
+    def _run_group(self, names, cancel):
+        catalog = self._fresh_catalog()
+        resolved = []
+        for name in names:
+            item = catalog.get(name.casefold())
+            if not item:
+                self.app.root.after(0, lambda n=name: self.app.set_status(f"[Party] {n}: không online."))
+                return False
+            resolved.append((name, item[0], item[1]))
+        leader_name, leader_gw, leader_snap = resolved[0]
+
+        # TLM 2.1.2 first makes every selected account leave its old team and
+        # proves TeamID is empty before creating the new group.
+        if not self._leave_members(names, cancel):
+            return False
+        if cancel.is_set() or self._batch_cancel.is_set():
+            return False
+
+        leader_snap = self.backend.driver.read_snapshot(leader_gw)
+        if not leader_snap:
+            return False
+        result = self.backend.party_create(leader_gw)
+        if not result.ok:
+            self.app.root.after(0, lambda t=result.detail: self.app.set_status(f"[Party] {t}"))
+            return False
+        leader_snap = self._wait_snapshot(
+            leader_gw, lambda s: s.team_id not in (0, -1), 8.0, cancel,
+        )
+        if not leader_snap:
+            self.app.root.after(0, lambda: self.app.set_status(f"[Party] {leader_name}: tạo đội chưa được xác nhận."))
+            return False
+        team_id = leader_snap.team_id
+        leader_role_id = leader_snap.role_id
+
+        for member_name, member_gw, member_snap in resolved[1:]:
+            if cancel.is_set() or self._batch_cancel.is_set():
+                return False
+            joined = False
+            for _attempt in range(3):
+                fresh_member = self.backend.driver.read_snapshot(member_gw)
+                fresh_leader = self.backend.driver.read_snapshot(leader_gw)
+                if fresh_member and fresh_leader and fresh_member.team_id == fresh_leader.team_id == team_id:
+                    joined = True
+                    break
+
+                invite = self.backend.party_invite(leader_gw, member_snap.role_id)
+                if not invite.ok:
+                    time.sleep(.4)
+                    continue
+
+                # Original TLM enables AutoAcceptInviteTeam. Until that setting
+                # is live-proven through this bridge, use the already-verified
+                # request-to-join route as a fail-closed acceptance fallback.
+                proven = self._wait_snapshot(member_gw, lambda s: s.team_id == team_id, 1.5, cancel)
+                if not proven:
+                    self.backend.party_join(member_gw, leader_role_id)
+                    proven = self._wait_snapshot(member_gw, lambda s: s.team_id == team_id, 5.0, cancel)
+                if proven:
+                    joined = True
+                    break
+            if not joined:
+                self.app.root.after(0, lambda n=member_name: self.app.set_status(f"[Party] {n}: chưa vào cùng đội."))
+                return False
+
+        # Final proof: all current members share the leader's TeamID.
+        for name, gw, _snap in resolved:
+            current = self.backend.driver.read_snapshot(gw)
+            if not current or current.team_id != team_id:
+                self.app.root.after(0, lambda n=name: self.app.set_status(f"[Party] {n}: TeamID không khớp."))
+                return False
+        return True
+
+    def toggle_run(self):
+        if self._batch_running:
+            self._batch_cancel.set()
+            for gd in self.groups:
+                gd["cancel"].set()
+            self.app.set_status("[Party] đang dừng...")
+            return
+
+        groups = [self._members(gd) for gd in self.groups]
+        groups = [g for g in groups if g]
+        if not groups:
+            self.app.set_status("[Party] chưa chọn nhóm.")
+            return
+        for gd, names in [(gd, self._members(gd)) for gd in self.groups if self._members(gd)]:
+            if not gd["vars"][0].get().strip():
+                self.app.set_status("[Party] trưởng nhóm phải nằm ở ô đầu tiên.")
+                return
+        used = set()
+        for names in groups:
+            for name in names:
+                key = name.casefold()
+                if key in used:
+                    self.app.set_status(f"[Party] {name} bị chọn ở nhiều nhóm.")
+                    return
+                used.add(key)
+
+        self.save_config()
+        self._batch_cancel.clear()
+        self._batch_running = True
+        self.start_button.config(text="Dừng", bg="#d12228")
+        threading.Thread(target=self._batch_worker, args=(groups,), name="tlm-party-batch", daemon=True).start()
+
+    def _batch_worker(self, groups):
+        results = [False] * len(groups)
+        threads = []
+
+        def run_one(i, names):
+            results[i] = self._run_group(names, self._batch_cancel)
+
+        try:
+            for i, names in enumerate(groups):
+                t = threading.Thread(target=run_one, args=(i, names), name=f"tlm-party-group-{i+1}", daemon=True)
+                threads.append(t)
+                t.start()
+            for t in threads:
+                t.join()
+            if all(results) and not self._batch_cancel.is_set():
+                self.app.root.after(0, self._after_party_action)
+        finally:
+            self.app.root.after(0, self._reset_run_button)
+
+    def _reset_run_button(self):
+        self._batch_running = False
+        self.start_button.config(text="Bắt đầu", bg=GREEN)
+
+    def _after_party_action(self):
+        mode = self.after.get()
+        mapping = {
+            "Train": (3, Action.TRAIN),
+            "Train LSV": (4, Action.TRAIN_LSV),
+            "Dồn vàng": (7, Action.DON_VANG),
+            "Phó bản": (5, Action.PHO_BAN),
+        }
+        target = mapping.get(mode)
+        if not target:
+            return
+        tab_index, action = target
+        self.app.notebook.select(tab_index)
+        self.after(350, lambda: self.action_all(action))
+
+    def stop(self):
+        self._closed = True
+        self._batch_cancel.set()
+        for gd in self.groups:
+            gd["cancel"].set()
+        self.save_config()
 
 
 class TrainTab(BaseTab):
@@ -636,6 +1022,7 @@ class TLMApplication:
     def close(self):
         for tab in self.tabs:
             if isinstance(tab,LoginTab): tab.save_accounts(); tab.schedule.stop()
+            if isinstance(tab,PartyTab): tab.stop()
             if isinstance(tab,ToiUuTab): tab.monitor.stop()
         self.store.save(); self.backend.driver.close(); self.root.destroy()
 
