@@ -10,6 +10,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from . import __version__
 from .backend import Action, TlmBackend
+from .game_data import map_name_to_id, map_names
 from .services import DailyScheduleService, MonitorService
 from .storage import SettingsStore
 from .theme import BG, GREEN, GRAY, PURPLE, WHITE, button, configure_root, labelframe
