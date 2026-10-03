@@ -1,0 +1,193 @@
+MapID,Name,ResName,Level,Type,ServerID,Music
+1,Phụng Minh Trấn,fengming_new_320,80,City,1,city_fengmingzhen_new
+2,Đại Lý,dali_new_320,0,City,1,dali
+3,Lạc Dương,luoyang_new,0,City,1,luoyang
+4,Tô Châu,suzhou_new,0,City,1,suzhou
+5,Lâu Lan,loulangucheng,75,City,1,loulan
+6,Thiếu Lâm Tự,shaolin,0,Faction,1,shaolin
+600,Phó Bản-Thiếu Lâm Tự,shaolin_1,0,Wild,1,shaolin
+601,Phụ Bản-Thiếu Lâm,shaolin_2,0,Wild,1,shaolin
+7,Cái Bang Tổng Đà,gaibang,0,Faction,1,songshan
+700,Phó Bản-Cái Bang Tổng Đà,gaibang_1,0,Wild,1,songshan
+701,Phụ Bản-Cái Bang Tổng Đà,gaibang_2,0,Wild,1,songshan
+8,Quang Minh Điện,mingjiao,0,Faction,1,mingjiao
+800,Phó Bản-Quang Minh Điện,mingjiao_1,0,Wild,1,mingjiao
+801,Phụ Bản-Quang Minh Điện,mingjiao_2,0,Wild,1,mingjiao
+9,Nga My Sơn,emei,0,Faction,1,emei
+900,Phó Bản-Nga My Sơn,emei_1,0,Wild,1,emei
+901,Phụ Bản-Nga My Sơn,emei_2,0,Wild,1,emei
+10,Thiên Long Tự,tianlong,0,Faction,1,shaolin
+1000,Phó Bản-Thiên Long Tự,tianlong_1,0,Wild,1,shaolin
+1001,Phụ Bản-Thiên Long Tự,tianlong_2,0,Wild,1,shaolin
+11,Lăng Ba Động ,xiaoyao,0,Faction,1,xiaoyao
+1100,Phó Bản-Lăng Ba Động ,xiaoyao_1,0,Wild,1,xiaoyao
+1101,Phụ Bản-Lăng Ba Động ,xiaoyao_2,0,Wild,1,xiaoyao
+12,Tinh Túc Hải,xingxiu,0,Faction,1,xingxiu
+1200,Phó Bản-Tinh Túc Hải,xingxiu_1,0,Wild,1,xingxiu
+1201,Phụ Bản-Tinh Túc Hải,xingxiu_2,0,Wild,1,xingxiu
+13,Thiên Sơn,tianshan,0,Faction,1,tianshan
+1300,Phó Bản-Thiên Sơn,tianshan_1,0,Wild,1,tianshan
+1301,Phụ Bản-Thiên Sơn,tianshan_2,0,Wild,1,tianshan
+14,Núi Võ Đang,wudang,0,Faction,1,songshan
+1400,Phó Bản-Núi Võ Đang,wudang_1,0,Wild,1,songshan
+1401,Phụ Bản-Núi Võ Đang,wudang_2,0,Wild,1,songshan
+15,Mộ Dung,gusu,0,Faction,1,gusu
+1500,Phó Bản-Mộ Dung,gusu_1,0,Wild,1,gusu
+1501,Phụ Bản-Mộ Dung,gusu_2,0,Wild,1,gusu
+16,Quỷ Cốc,guigu,0,Faction,1,guigu
+1600,Phó Bản-Quỷ Cốc,guigu_1,0,Wild,1,guigu
+1601,Phụ Bản-Quỷ Cốc,guigu_2,0,Wild,1,guigu
+17,Đường Môn,tangmen,0,Faction,1,tangmen
+1700,Phó Bản-Đường Môn,tangmen_1,0,Wild,1,tangmen
+1701,Phụ Bản-Đường Môn,tangmen_2,0,Wild,1,tangmen
+18,Đào Hoa,taohuadao,0,Faction,1,taohuadao
+1800,Phó Bản-Đào Hoa,taohuadao_1,0,Wild,1,taohuadao_xiaogushan
+1801,Phụ Bản-Đào Hoa,taohuadao_2,0,Wild,1,taohuadao
+137,Mạn Đà Sơn Trang,mantuoshanzhuang,0,Faction,1,mantuoshanzhuang
+13700,Phó Bản-Mạn Đà,mantuoshanzhuang_1,0,Wild,1,mantuoshanzhuang
+13701,Phụ Bản-Mạn Đà,mantuoshanzhuang_2,0,Wild,1,mantuoshanzhuang
+143,Tuyệt Tình Cốc,congren,0,Faction,1,cangwumijing
+14300,Phó Bản-Tuyệt Tình Cốc,congren_1,0,Wild,1,cangwumijing
+14301,Phụ Bản-Tuyệt Tình Cốc,congren_2,0,Wild,1,cangwumijing
+19,Vô Lượng Sơn,wuliang,0,Wild,1,diewu
+20,Nhĩ Hải,erhai,0,Wild,1,cangshan
+21,Kiếm Các,jiange,0,Wild,1,jiange
+22,Đôn Hoàng,dunhuang,0,Wild,1,dunhuang
+23,Tung Sơn,songshan,0,Wild,1,songshan
+24,Nhạn Nam,yannan,0,Wild,1,yannan
+25,Thái Hồ,taihu,0,Wild,1,songshan
+2600,Dạ Tây Hồ,xihu_1,0,Wild,1,suzhou
+27,Long Tuyền,longquan,0,Wild,1,suzhou
+28,Kiếm Gia,jianzhong,0,Wild,1,jiange
+29,Thanh Nguyên,quanzhou,0,Wild,1,quanzhou
+30,Kính Hồ,jinghu,0,Wild,1,jinghu
+31,Nhạn Bắc,yanbei,0,Wild,1,yannan
+32,Thảo Liệu Trường,caoliao,0,Wild,1,panjun
+33,Yến Vương Cổ Mộ Tầng 1,bashu_1,0,Wild,1,yinsen1
+34,Yến Vương Cổ Mộ Tầng 2,bashu_2,0,Wild,1,yinsen2
+35,Yến Vương Cổ Mộ Tầng 3,bashu_3,0,Wild,1,yinsen1
+36,Yến Vương Cổ Mộ Tầng 4,bashu_4,0,Wild,1,yinsen2
+37,Yến Vương Cổ Mộ Tầng 5,bashu_5,0,Wild,1,yinsen2
+38,Yến Vương Cổ Mộ Tầng 6,bashu_6,0,Wild,1,horror_2
+39,Yến Vương Cổ Mộ Tầng 7,bashu_7,0,Wild,1,siwang
+40,Yến Vương Cổ Mộ Tầng 8,bashu_8,0,Wild,1,yinsen1
+41,Yến Vương Cổ Mộ Tầng 9,bashu_9,0,Wild,1,yinsen2
+42,Ma Nhai Động,moyadong,0,Wild,1,horror_2
+43,Thảo Nguyên,caoyuan,0,Wild,1,caoyuan
+44,Thủy Kính Hồ,shuijinghu,0,Wild,1,jinghu
+45,Liêu Tây,liaoxi,0,Wild,1,caoyuan
+46,Tiên Vương Phần,xianwangfen,0,Wild,1,yinsen2
+47,Ngân Ngai Tuyết Nguyên,bingkang,0,Wild,1,yinsen2
+48,Trường Bạch Sơn,changbai,0,Wild,1,changbai
+49,Hoàng Long Phủ,huanglong,0,Wild,1,changbai
+50,Bảo Tàng Động Tầng 1,baozang_1,0,Wild,1,zhandou
+51,Bảo Tàng Động Tầng 2,baozang_2,0,Wild,1,huanjing
+52,Bảo Tàng Động Tầng 3,baozang_3,0,Wild,1,horror_2
+53,Bảo Tàng Động Tầng 4,baozang_4,0,Wild,1,shenchen2
+54,Bảo Tàng Động Tầng 5,baozang_5,0,Wild,1,shenchen1
+55,Hỏa Diệm Sơn,huoyanshan,90,Wild,1,huoyanshan
+56,Ôn Tuyền Động,wenquandong,0,Wild,1,yinsen2
+57,Thương Sơn,cangshan,0,Wild,1,cangshan
+59,Dã Nhân Cốc,yerengou,0,Wild,1,shenchen2
+60,Thạch Lâm,shilin,0,Wild,1,shilin
+61,Ngọc Khê,yuxi,0,Wild,1,shilin
+62,Đào Hoa Nguyên,taohuayuan,0,Wild,1,taohuadao
+63,Nam Chiêu,nanzhao,0,Wild,1,nanzhao
+64,Miêu Cương,miaojiang,0,Wild,1,mieshihuoku
+65,Diêm Hồ,yanhu,0,Wild,1,yinsen2
+66,Bạch Sa Diêm Khanh,yankeng,0,Wild,1,yinsen2
+67,Thiên Khanh Thụ Động,shudong,0,Wild,1,yinsen2
+68,Cao Xương,gaochang,90,Wild,1,gaochang
+69,Cao Xương Mê Cung,gaochangmigong,90,Wild,1,guhuolinggu
+70,Hỏa Diệm Cốc,huoyangu,90,Wild,1,hunli
+71,Đại Uyển,dawan,100,Wild,1,dawan
+72,Hãn Huyết Lĩnh,hanxieling,100,Wild,1,hanbinghaiyu
+73,Tháp Lý Mộc,talimu,100,Wild,1,talimu
+74,Tháp Khắc Lạp Mã Can,takelamagan,100,Wild,1,diewu
+75,Côn Lôn Sơn,kunlunshan,100,Wild,1,changbai
+76,Côn Lôn Phúc Địa,kunlunfudi,100,Wild,1,yanziwu
+77,Trân Long Kỳ Cuộc,zhenlong,0,Wild,1,battle_zhengding
+78,Mộc Nhân Hạng,newbie_1,0,Wild,1,jiang2
+79,Hậu Hoa Viên,newbie_2,0,Wild,1,jiang2
+80,Vạn Kiếp Cốc,wanjie,0,Wild,1,dakunyihai
+81,Huyền Vũ Đảo,petisland,0,Wild,1,nanhai
+82,Thánh Thú Sơn,petisland_1,75,Wild,1,shenchen2
+83,Võ Di,wuyi,0,Wild,1,dali
+84,Mai Lĩnh,meiling,0,Wild,1,dali
+85,Nam Hải,nanhai,0,Wild,1,nanhai
+86,Quỳnh Châu,qiongzhou,0,Wild,1,nanhai
+87,Địa Phủ,siwang,0,Wild,1,siwang
+88,Lôi Đài,leitai_2,0,Wild,1,zhandou
+89,Lôi Đài 1,leitai_2,0,Wild,1,zhandou
+90,Lôi Đài 2,leitai_2,0,Wild,1,zhandou
+91,Tặc Khấu Doanh Địa,muchang,0,Wild,1,xiaoyao
+92,Thuỷ Lao,shuilao,0,Wild,1,panjun
+93,Biên Giới Tống Liêu,songliao,0,Wild,1,panjun
+94,Trúc Lâm,zhulin,0,Wild,1,jiange
+95,Dã Ngoại Trại Phỉ,yewai,0,Wild,1,panjun
+96,Huyệt Mộ,muxue,0,Wild,1,siwang
+97,Giám Ngục,prison,0,Wild,1,yinsen1
+98,Tiền Trang,qianzhuang,0,Wild,1,biwuzhaoqin
+99,Hoàng Long Động,huanglongdong,0,Wild,1,yinsen1
+101,Lâu Lan Bảo Tàng Động,loulanxunbao,0,Wild,1,jiang2
+102,Sinh Tiêu Lôi Đài,shengxiaolaolong,0,Wild,1,jiange
+103,Mẫu Đan Uyển,cuju,0,Wild,1,battle_zhengding
+104,Phiêu Miễu Phong,piaomiao,0,Wild,1,tianshan
+105,Yến Tử Ô,yanziwu,0,Wild,1,yanziwu
+106,Hoa Sơn Luận Kiếm,huashan,0,Wild,1,zhandou
+107,Kính Hồ Phỉ Trại,jiaofei,0,Wild,1,zhandou
+108,Huyền Lôi Pha,xuanmuchang,0,Wild,1,jiange
+109,Độc Chướng Trạch Địa,dumuchang,0,Wild,1,jiang2
+110,Dung Nham Chi Địa,huomuchang,0,Wild,1,panjun
+111,Lôi Đài Sinh Tử,NewShaXing,0,Wild,1,zhandou
+112,Đấu Trường Loạn Chiến,juxian,0,Wild,1,zhandou
+10008,Chiến Trường Tống Liêu,Songliao_War,0,Wild,1,sldz
+10011,Chiến Trường Trác Lộc,zhuluKVK,0,Wild,1,sldz
+114,Tần Hoàng Địa Cung Tầng 1,qinhuanggong_1,90,Wild,1,yinsen1
+115,Tần Hoàng Địa Cung Tầng 2,qinhuanggong_2,90,Wild,1,yinsen2
+116,Tần Hoàng Địa Cung Tầng 3,qinhuanggong_3,90,Wild,1,yinsen3
+117,Tần Hoàng Địa Cung Tầng 4,qinhuanggong_4,90,Wild,1,qinhuangdigong4
+118,Nông Trường Dã Trư,muchang,0,Wild,1,xiaoyao
+119,Phụ Bản Bang Hội,zhenshoulan,0,Wild,1,xiaoyao
+120,Phụng Minh Vương Lăng,chengshiwangling,0,Wild,1,quanzhoushandong
+121,Quân Thiên Thành,juntiancheng,0,Wild,1,zhandou
+122,La Phù Thành,luofucheng,0,Wild,1,zhandou
+123,Triều Kinh Thành,chaojingcheng,0,Wild,1,zhandou
+124,Thông Thiên Tháp 1,tongtianta1,0,Wild,1,zhandou
+125,Thông Thiên Tháp 2,tongtianta2,0,Wild,1,zhandou
+126,Thông Thiên Tháp 3,tongtianta3,0,Wild,1,zhandou
+127,Thông Thiên Tháp 4,tongtianta4,0,Wild,1,zhandou
+128,Thông Thiên Tháp 5,tongtianta5,0,Wild,1,zhandou
+129,Cạnh Kỹ Trường-Đông,jingjichang,0,Wild,1,zhandou
+130,Cạnh Kỹ Trường-Tây,jingjichang,0,Wild,1,zhandou
+131,Cạnh Kỹ Trường-Nam,jingjichang,0,Wild,1,zhandou
+132,Cạnh Kỹ Trường-Bắc,jingjichang,0,Wild,1,zhandou
+133,Cạnh Kỹ Trường-Thượng,jingjichang,0,Wild,1,zhandou
+134,Cạnh Kỹ Trường-Hạ,jingjichang,0,Wild,1,zhandou
+135,Cạnh Kỹ Trường-Trung Tâm,jingjichang,0,Wild,1,zhandou
+136,Hàn Ngọc Cốc,hanyuchuang_1,0,Wild,1,jiange
+142,Đại Hội Tỷ Võ,dataosha,0,Wild,1,zhandou
+144,Tứ Tuyệt Trang,sijuezhuang,0,Wild,1,sijuezhuang
+145,Thiếu Thất Sơn,cangjingge_80JQTZ,0,Wild,1,cangjingge80
+146,Binh Thánh Kỳ Trận,BattleField,0,Wild,1,battle_wending
+10000,Lạc Dương Liên Server,luoyang_new_snow,0,City,1,biwuzhaoqin
+10001,Lôi Đài,leitai_2,0,Wild,1,zhandou
+10002,Lôi Đài 1,leitai_2,0,Wild,1,zhandou
+10003,Lôi Đài 2,leitai_2,0,Wild,1,zhandou
+10004,Phàm Liên Trại,shuipoliangshan,0,Wild,1,xuezhanyanmenguan
+10005,Thanh Liên Trại,shuipoliangshan_w02s,0,Wild,1,xinhuashan
+10007,Khô Vinh Đạo,weichengcaoyuan_ZC,0,Wild,1,yunfu
+10009,Đấu Trường Liên Đấu,kuafuzongjuesai,0,Wild,1,zhandou
+10010,Đấu Trường Loạn Chiến,juxian,0,Wild,1,zhandou
+10014,Tần Hoàng Địa Cung Tầng 1,qinhuanggong_1,90,Wild,1,yinsen1
+10015,Tần Hoàng Địa Cung Tầng 2,qinhuanggong_2,90,Wild,1,yinsen2
+10016,Tần Hoàng Địa Cung Tầng 3,qinhuanggong_3,90,Wild,1,yinsen3
+10017,Tần Hoàng Địa Cung Tầng 4,qinhuanggong_4,90,Wild,1,qinhuangdigong4
+10018,Vong Xuyên Hoa Hải,wangchuanhuahai,90,Wild,1,xinhuashan
+10019,Thiên Kỳ Nam Hoài,tianqinanhuai,90,Wild,1,yunfu
+10020,Mạc Nam Thanh Nguyên,monanqingyuan,90,Wild,1,xuezhanyanmenguan
+10021,Lâm Hải Khê Cốc,linhaixigu,90,Wild,1,xinhuashan
+10022,Phụng Hoàng Cổ Thành,PhoenixPlain,90,Wild,1,bingxuebuyecheng
+100000,Phòng Chờ Thi Đấu,ZBS_Xiuxi,1,Wild,1,mantuofb
+100001,Đấu Trường,XBWDH_Fuben,1,Wild,1,bingxuebuyecheng
+20000,Tam Thiên Thành,guishi,80,City,300,city_fengmingzhen_new
