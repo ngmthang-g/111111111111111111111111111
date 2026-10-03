@@ -166,3 +166,12 @@ def test_train_sell_choices_use_tlm_builtin_presets_plus_manual_coords():
     assert '"=====Thủ công====="' in block
     assert "SELL_MAP_COORDS" in block
     assert 'button(frame, "Bán"' in block
+
+
+def test_bag_scan_prefers_exact_tlm_get_items_at_site_with_safe_fallback():
+    text = (Path(__file__).parents[1] / "native/TlmSemanticBridge.cpp").read_text(encoding="utf-8")
+    assert 'FindMethod(c.game,"GetItemsAtSite",1,true)' in text
+    assert "TryReadBagIndexed" in text
+    assert "TryReadBagEnumerator" in text
+    assert "TryReadBagByPosition" in text
+    assert "GetItemsAtSite/GetItemAtSite" in text
