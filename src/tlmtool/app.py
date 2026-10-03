@@ -163,7 +163,8 @@ class LoginTab(BaseTab):
         ).grid(row=0, column=0)
         account_table_header(
             table,
-            [("", 2), ("Tài khoản", 14), ("Mật khẩu", 12), ("Ẩn captcha", 9), ("Login", 5), ("Proxy", 5)],
+            [("Tài khoản", 14), ("Mật khẩu", 12), ("Ẩn captcha", 9), ("Login", 5), ("Proxy", 5)],
+            start_col=1,
         )
 
         saved = self.store.get_json("accounts", "rows", [])
