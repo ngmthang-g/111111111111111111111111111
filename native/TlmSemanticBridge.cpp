@@ -19,7 +19,7 @@ using MethodInfo = void;
 using FieldInfo = void;
 
 HANDLE g_mapping = nullptr;
-SharedBlock* g_shared = nullptr;
+SharedBlock* g_shared = nullptr;\n\ntemplate <class T, size_t N> constexpr size_t ArrayCount(T (&)[N]) noexcept { return N; }
 
 template<class T> bool Resolve(HMODULE m, const char* name, T& out) {
     FARPROC p = GetProcAddress(m, name); out = nullptr; if (!p) return false;
@@ -119,7 +119,7 @@ bool FindUi(const Classes&c,const char*name,Il2CppObject*&ui,wchar_t*d,size_t ca
 bool AutoFight(bool start,wchar_t*d,size_t cap){Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;Il2CppObject*ui=nullptr;if(!FindUi(c,"AutoFight_Main",ui,d,cap))return false;auto*k=g_api.object_get_class(ui);auto*m=FindMethod(k,"StartAutoFight",1,false);if(!m){SetText(d,cap,L"StartAutoFight không phải managed method trên UI build này");return false;}int32_t mode=start?1:0;void*args[]={&mode};if(!InvokeVoid(m,ui,args,d,cap))return false;SetText(d,cap,start?L"Đã StartAutoFight(Train)":L"Đã StopAutoFight");return true;}
 
 bool EnsureShared(){
-    if(g_shared)return true;wchar_t name[96]{};MappingName(GetCurrentProcessId(),name,_countof(name));g_mapping=OpenFileMappingW(FILE_MAP_ALL_ACCESS,FALSE,name);if(!g_mapping)return false;
+    if(g_shared)return true;wchar_t name[96]{};MappingName(GetCurrentProcessId(),name,ArrayCount(name));g_mapping=OpenFileMappingW(FILE_MAP_ALL_ACCESS,FALSE,name);if(!g_mapping)return false;
     g_shared=reinterpret_cast<SharedBlock*>(MapViewOfFile(g_mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(SharedBlock)));
     if(!g_shared||g_shared->magic!=kMagic||g_shared->protocolVersion!=kProtocolVersion||g_shared->targetPid!=GetCurrentProcessId()){if(g_shared)UnmapViewOfFile(g_shared);if(g_mapping)CloseHandle(g_mapping);g_shared=nullptr;g_mapping=nullptr;return false;}
     InterlockedExchange(&g_shared->bridgeLoaded,1);return true;
@@ -127,18 +127,18 @@ bool EnsureShared(){
 void ProcessRequest(){
     if(!EnsureShared())return;LONG seq=g_shared->requestSeq;if(seq<=0||seq==g_shared->completedSeq)return;if(InterlockedCompareExchange(&g_shared->bridgeBusy,1,0)!=0)return;
     Response r{};wchar_t detail[512]{};bool ok=false;
-    if(GetCurrentThreadId()!=g_shared->targetWindowThreadId){SetText(detail,_countof(detail),L"Sai callback thread");}
+    if(GetCurrentThreadId()!=g_shared->targetWindowThreadId){SetText(detail,ArrayCount(detail),L"Sai callback thread");}
     else {auto cmd=static_cast<Command>(g_shared->request.command);switch(cmd){
-        case Command::ReadState: ok=ReadState(r.snapshot,detail,_countof(detail));break;
-        case Command::ToggleRide: ok=ToggleRide(g_shared->request.arg0!=0,detail,_countof(detail));break;
-        case Command::StartPath: ok=StartPath(g_shared->request.arg0,g_shared->request.arg1,g_shared->request.arg2,detail,_countof(detail));break;
-        case Command::StopPath: ok=StopPath(detail,_countof(detail));break;
-        case Command::ClickNpc: ok=ClickNpc(g_shared->request.arg0,detail,_countof(detail));break;
-        case Command::StartAutoFight: ok=AutoFight(true,detail,_countof(detail));break;
-        case Command::StopAutoFight: ok=AutoFight(false,detail,_countof(detail));break;
-        default: SetText(detail,_countof(detail),L"Command chưa được port trong T04 core bridge");break;
+        case Command::ReadState: ok=ReadState(r.snapshot,detail,ArrayCount(detail));break;
+        case Command::ToggleRide: ok=ToggleRide(g_shared->request.arg0!=0,detail,ArrayCount(detail));break;
+        case Command::StartPath: ok=StartPath(g_shared->request.arg0,g_shared->request.arg1,g_shared->request.arg2,detail,ArrayCount(detail));break;
+        case Command::StopPath: ok=StopPath(detail,ArrayCount(detail));break;
+        case Command::ClickNpc: ok=ClickNpc(g_shared->request.arg0,detail,ArrayCount(detail));break;
+        case Command::StartAutoFight: ok=AutoFight(true,detail,ArrayCount(detail));break;
+        case Command::StopAutoFight: ok=AutoFight(false,detail,ArrayCount(detail));break;
+        default: SetText(detail,ArrayCount(detail),L"Command chưa được port trong T04 core bridge");break;
     }}
-    r.ok=ok?1:0;SetText(r.detail,_countof(r.detail),detail);g_shared->response=r;MemoryBarrier();InterlockedExchange(&g_shared->completedSeq,seq);InterlockedExchange(&g_shared->bridgeBusy,0);
+    r.ok=ok?1:0;SetText(r.detail,ArrayCount(r.detail),detail);g_shared->response=r;MemoryBarrier();InterlockedExchange(&g_shared->completedSeq,seq);InterlockedExchange(&g_shared->bridgeBusy,0);
 }
 } // namespace
 
