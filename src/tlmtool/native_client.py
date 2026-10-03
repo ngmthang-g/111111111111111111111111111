@@ -16,12 +16,17 @@ WH_GETMESSAGE = 3
 
 
 class Snapshot(ctypes.Structure):
+    # Keep this field order exactly synchronized with native/include/protocol.h.
     _fields_ = [
-        ("validMask", ctypes.c_uint32), ("roleID", ctypes.c_int32), ("mapID", ctypes.c_int32),
-        ("x", ctypes.c_int32), ("y", ctypes.c_int32), ("riding", ctypes.c_int32),
-        ("autoPathing", ctypes.c_int32), ("mapReady", ctypes.c_int32),
-        ("waitingChangeMap", ctypes.c_int32), ("dead", ctypes.c_int32),
-        ("autoFight", ctypes.c_int32), ("freeBagSpace", ctypes.c_int32),
+        ("validMask", ctypes.c_uint32),
+        ("roleID", ctypes.c_int32), ("teamID", ctypes.c_int32),
+        ("level", ctypes.c_int32), ("factionID", ctypes.c_int32),
+        ("hp", ctypes.c_int32), ("maxHP", ctypes.c_int32),
+        ("mapID", ctypes.c_int32), ("x", ctypes.c_int32), ("y", ctypes.c_int32),
+        ("riding", ctypes.c_int32), ("autoPathing", ctypes.c_int32),
+        ("mapReady", ctypes.c_int32), ("waitingChangeMap", ctypes.c_int32),
+        ("dead", ctypes.c_int32), ("autoFight", ctypes.c_int32),
+        ("freeBagSpace", ctypes.c_int32),
         ("characterName", ctypes.c_wchar * 64),
     ]
 
@@ -68,6 +73,7 @@ class Command:
     READ_BAG_PAGE=19; DROP_BAG_ITEM=20; SELL_BAG_ITEM=21; SELECT_TARGET=22; CLICK_TRAVEL=23
     CONFIRM_TRAVEL=24; TEST_OPEN_BAG=25; CLICK_INTERNAL_RAW=26; DRAG_INTERNAL=27; PROBE_LOOT=28
     PICK_NEAREST_LOOT=29; PROBE_UI_DIRECT=32; INVOKE_UI_DIRECT=33
+    PARTY_LEAVE=34; PARTY_INVITE=35; PARTY_JOIN=36; REVIVE_NORMAL=37
 
 
 class BridgeReply:
@@ -163,7 +169,15 @@ class RuntimeBridgeManager:
         r=self.raw(gw,Command.READ_STATE)
         if not r.ok:return None
         s=r.snapshot
-        return LocalRoleSnapshot(pid=gw.pid,captured_ms=int(time.time()*1000),role_id=s.roleID,name=str(s.characterName),map_id=s.mapID,x=s.x,y=s.y,is_dead=bool(s.dead),is_riding=bool(s.riding),map_ready=bool(s.mapReady))
+        return LocalRoleSnapshot(
+            pid=gw.pid, captured_ms=int(time.time()*1000),
+            role_id=s.roleID, name=str(s.characterName),
+            level=s.level, faction_id=s.factionID, team_id=s.teamID,
+            hp=s.hp, max_hp=s.maxHP,
+            map_id=s.mapID, x=s.x, y=s.y,
+            is_dead=bool(s.dead), is_riding=bool(s.riding),
+            map_ready=bool(s.mapReady),
+        )
 
     def close(self)->None:
         with self._lock:
