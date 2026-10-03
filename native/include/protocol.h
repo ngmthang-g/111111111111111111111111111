@@ -24,7 +24,8 @@ enum class Command : std::uint32_t {
     ClickTravelSemantic = 23, ConfirmTravelSemantic = 24, TestOpenBag = 25,
     ClickInternalPointRawTest = 26, DragInternalPoint = 27,
     ProbeNearbyLoot = 28, PickNearestLoot = 29, ProbeUiDirect = 32,
-    InvokeUiDirect = 33,
+    InvokeUiDirect = 33, PartyLeave = 34, PartyInvite = 35,
+    PartyJoin = 36, ReviveNormal = 37,
 };
 
 enum class UiDirectTarget : std::int32_t {
@@ -47,12 +48,16 @@ enum SnapshotValid : std::uint32_t {
     ValidMapTransition=1u<<0, ValidIdentity=1u<<1, ValidMap=1u<<2,
     ValidPosition=1u<<3, ValidRiding=1u<<4, ValidAutoPath=1u<<5,
     ValidLifeState=1u<<6, ValidAutoFight=1u<<7, ValidBagSpace=1u<<8,
+    ValidTeam=1u<<9, ValidVitals=1u<<10, ValidProfile=1u<<11,
 };
 
 struct Snapshot {
-    std::uint32_t validMask=0; std::int32_t roleID=0,mapID=0,x=0,y=0;
+    std::uint32_t validMask=0;
+    std::int32_t roleID=0,teamID=0,level=0,factionID=0;
+    std::int32_t hp=0,maxHP=0,mapID=0,x=0,y=0;
     std::int32_t riding=0,autoPathing=0,mapReady=0,waitingChangeMap=0;
-    std::int32_t dead=0,autoFight=0,freeBagSpace=-1; wchar_t characterName[64]{};
+    std::int32_t dead=0,autoFight=0,freeBagSpace=-1;
+    wchar_t characterName[64]{};
 };
 struct Request { std::uint32_t command=0; std::int32_t arg0=0,arg1=0,arg2=0; };
 struct BagItemSnapshot {
