@@ -558,15 +558,31 @@ class LoginTab(BaseTab):
         mode = self.after_login.get()
         if mode == "Chờ":
             return
-        mapping = {
-            "Party": Action.PARTY,
-            "Train": Action.TRAIN,
-            "Train LSV": Action.TRAIN_LSV,
-            "Dồn vàng": Action.DON_VANG,
+
+        # TLM 2.1.2 does not dispatch these choices through one generic
+        # gameplay action. It switches to the target tab, waits for that tab's
+        # account scan, then starts the tab-specific toggle.
+        targets = {
+            "Party": (2, "toggle_run"),
+            "Train": (3, "_toggle_farm"),
+            "Train LSV": (4, "_toggle_farm"),
+            "Dồn vàng": (7, "_toggle_farm"),
         }
-        action = mapping.get(mode)
-        if action is not None:
-            self.action_all(action)
+        target = targets.get(mode)
+        if target is None:
+            return
+        tab_index, method_name = target
+        self.app.notebook.select(tab_index)
+
+        def activate():
+            tab = self.app.tabs[tab_index]
+            method = getattr(tab, method_name, None)
+            if callable(method):
+                method()
+            else:
+                self.app.set_status(f"[LOGIN] {mode}: workflow đang chờ hoàn thiện.")
+
+        self.after(350, activate)
 
     def apply_schedule(self):
         for k, v in [
