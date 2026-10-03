@@ -1027,24 +1027,586 @@ class PartyTab(BaseTab):
 
 
 class TrainTab(BaseTab):
-    def __init__(self,master,app):
-        super().__init__(master,app)
-        city=labelframe(self,"Cấu hình Về thành"); city.pack(fill="x",padx=5,pady=(5,2))
-        r=tk.Frame(city,bg=BG); r.pack(fill="x",padx=4,pady=3); tk.Label(r,text="Điều kiện về thành:",bg=BG,font=("Segoe UI",9,"bold")).pack(side="left")
-        v=tk.StringVar(value="period")
-        for t,x in [("Không về","none"),("Khi đầy túi","bag"),("Theo chu kỳ (phút):","period")]: tk.Radiobutton(r,text=t,value=x,variable=v,bg=BG).pack(side="left",padx=2)
-        tk.Spinbox(r,from_=1,to=999,width=4).pack(side="left"); button(r,"Hiện cấu hình",None,"gray").pack(side="right")
-        cfg=labelframe(self,"Cấu hình Train"); cfg.pack(fill="x",padx=5,pady=2); tk.Label(cfg,text="Trong khi train:",bg=BG,font=("Segoe UI",9,"bold")).pack(anchor="w",padx=5)
-        checks(cfg,["Quay lại train khi chết","Tự kết nối lại khi mất mạng","Nhặt đồ không dùng hồ lô (cần khôn hồ)","Trị liệu sau khi chết"])
-        h=tk.Frame(cfg,bg=BG); h.pack(fill="x",padx=5); tk.Label(h,text="Tọa độ trị liệu:",bg=BG).pack(side="left"); ttk.Combobox(h,values=["Trị liệu Tô Châu"],width=20).pack(side="left")
-        f=tk.Frame(cfg,bg=BG); f.pack(fill="x",padx=5); tk.Label(f,text="Lọc đồ giữ lại:",bg=BG,font=("Segoe UI",9,"bold")).pack(side="left"); q=tk.StringVar(value="Tất cả")
-        for x in ["Không","Chỉ vũ khí","Tất cả"]: tk.Radiobutton(f,text=x,value=x,variable=q,bg=BG).pack(side="left")
-        tk.Label(cfg,text="Dùng thú cưỡi gần được (2x, 4x...):",bg=BG,font=("Segoe UI",9,"bold")).pack(anchor="w",padx=5); button(cfg,"+ Thêm",None,"green").pack(anchor="w",padx=5,pady=3)
-        coord=labelframe(self,"Cấu hình tọa độ lưu sẵn"); coord.pack(fill="x",padx=5,pady=2); button(coord,"+ Thêm tọa độ",None,"green").pack(side="left",padx=5,pady=5); button(coord,"Ẩn danh sách tọa độ",None,"gray").pack(side="right",padx=5,pady=5)
-        lst=labelframe(self,"Danh sách tài khoản"); lst.pack(fill="both",expand=True,padx=5,pady=2); account_table_header(lst,[("Nhân vật",18),("Tọa độ bán",16),("Tọa độ Train",16)])
-        bar=tk.Frame(self,bg=BG); bar.pack(side="bottom",fill="x",padx=7); tk.Label(bar,text="Điều khiển tất cả:",bg=BG,font=("Segoe UI",9,"bold")).pack(side="left")
-        for t,a in [("Tới bán đồ",Action.TOI_CHO_BAN),("Bán đồ",Action.BAN_DO),("Tới bãi train",Action.TOI_CHO_TRAIN),("Đánh",Action.DANH)]: button(bar,t,lambda aa=a:self.action_all(aa),"blue").pack(side="left",padx=2)
-        start_bar(self,lambda:self.action_all(Action.TRAIN))
+    ARRIVE_TOLERANCE = 40
+    REFRESH_MS = 2500
+
+    def __init__(self, master, app):
+        super().__init__(master, app)
+        self._closed = False
+        self._refresh_busy = False
+        self._running = False
+        self._stop_all_event = threading.Event()
+        self._session_stops: dict[int, threading.Event] = {}
+        self.coord_rows: list[dict[str, object]] = []
+        self.account_rows: dict[int, dict[str, object]] = {}
+        self.account_config = self.store.get_json("Farm", "accounts", {})
+
+        city = labelframe(self, "Cấu hình Về thành")
+        city.pack(fill="x", padx=5, pady=(5, 2))
+        r = tk.Frame(city, bg=BG)
+        r.pack(fill="x", padx=4, pady=3)
+        tk.Label(r, text="Điều kiện về thành:", bg=BG, font=("Segoe UI", 9, "bold")).pack(side="left")
+        self.town_condition = tk.StringVar(value=self.store.get("Farm", "town_condition", "period"))
+        for text, value in [("Không về", "none"), ("Khi đầy túi", "bag"), ("Theo chu kỳ (phút):", "period")]:
+            tk.Radiobutton(
+                r, text=text, value=value, variable=self.town_condition, bg=BG,
+                command=self._save_config,
+            ).pack(side="left", padx=2)
+        self.loop_minutes = tk.IntVar(value=max(1, self.store.get_int("Farm", "loop_minutes", 30)))
+        self.loop_spin = tk.Spinbox(r, from_=1, to=999, width=4, textvariable=self.loop_minutes, command=self._save_config)
+        self.loop_spin.pack(side="left")
+        self.loop_spin.bind("<FocusOut>", lambda _e: self._save_config())
+        button(r, "Hiện cấu hình", self._toggle_town_config, "gray").pack(side="right")
+
+        self.town_extra = tk.Frame(city, bg=BG)
+        self.town_extra_visible = False
+        tk.Label(
+            self.town_extra,
+            text="Bán đồ / mua thuốc / trị liệu sẽ chỉ chạy khi primitive tương ứng đã có state proof.",
+            bg=BG, fg=GRAY, anchor="w", wraplength=400,
+        ).pack(fill="x", padx=5, pady=(0, 4))
+
+        cfg = labelframe(self, "Cấu hình Train")
+        cfg.pack(fill="x", padx=5, pady=2)
+        tk.Label(cfg, text="Trong khi train:", bg=BG, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=5)
+        self.respawn = tk.BooleanVar(value=self.store.get_bool("Farm", "respawn", False))
+        self.auto_reconnect = tk.BooleanVar(value=self.store.get_bool("Farm", "auto_reconnect", False))
+        self.pickup_no_cankhon = tk.BooleanVar(value=self.store.get_bool("Farm", "pickup_no_cankhon", False))
+        self.heal_after_death = tk.BooleanVar(value=self.store.get_bool("Farm", "heal_after_death", False))
+        for text, var in [
+            ("Quay lại train khi chết", self.respawn),
+            ("Tự kết nối lại khi mất mạng", self.auto_reconnect),
+            ("Nhặt đồ không dùng hồ lô (cần khôn hồ)", self.pickup_no_cankhon),
+            ("Trị liệu sau khi chết", self.heal_after_death),
+        ]:
+            tk.Checkbutton(cfg, text=text, variable=var, bg=BG, command=self._save_config).pack(anchor="w", padx=5)
+
+        heal = tk.Frame(cfg, bg=BG)
+        heal.pack(fill="x", padx=5)
+        tk.Label(heal, text="Tọa độ trị liệu:", bg=BG).pack(side="left")
+        self.heal_map = tk.StringVar(value=self.store.get("Farm", "heal_map", "Trị liệu Tô Châu"))
+        ttk.Combobox(
+            heal, textvariable=self.heal_map,
+            values=["Trị liệu Tô Châu", "Trị liệu Đại Lý", "Trị liệu Lạc Dương"],
+            state="readonly", width=20,
+        ).pack(side="left")
+
+        keep = tk.Frame(cfg, bg=BG)
+        keep.pack(fill="x", padx=5)
+        tk.Label(keep, text="Lọc đồ giữ lại:", bg=BG, font=("Segoe UI", 9, "bold")).pack(side="left")
+        self.pickup_mode = tk.StringVar(value=self.store.get("Farm", "pickup_mode", "Tất cả"))
+        for value in ["Không", "Chỉ vũ khí", "Tất cả"]:
+            tk.Radiobutton(
+                keep, text=value, value=value, variable=self.pickup_mode, bg=BG,
+                command=self._save_config,
+            ).pack(side="left")
+
+        tk.Label(cfg, text="Dùng thú cưỡi gần được (2x, 4x...):", bg=BG, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=5)
+        button(cfg, "+ Thêm", self._add_buff_placeholder, "green").pack(anchor="w", padx=5, pady=3)
+
+        coord = labelframe(self, "Cấu hình tọa độ lưu sẵn")
+        coord.pack(fill="x", padx=5, pady=2)
+        self.coord_content = tk.Frame(coord, bg=BG)
+        self.coord_content.pack(fill="x", padx=4, pady=(2, 0))
+        header = tk.Frame(self.coord_content, bg=BG)
+        header.pack(fill="x")
+        for text, width in [("Tên", 9), ("Map", 12), ("X", 4), ("Y", 4), ("Áp dụng hết", 10), ("Xóa", 4)]:
+            tk.Label(header, text=text, bg=BG, font=("Segoe UI", 9, "bold"), width=width).pack(side="left")
+        self.coord_body = tk.Frame(self.coord_content, bg=BG)
+        self.coord_body.pack(fill="x")
+        toolbar = tk.Frame(coord, bg=BG)
+        toolbar.pack(fill="x", padx=4, pady=(1, 4))
+        button(toolbar, "+ Thêm tọa độ", self._add_coord_row, "green").pack(side="left")
+        self.coord_toggle_btn = button(toolbar, "Ẩn danh sách tọa độ", self._toggle_coord_list, "gray")
+        self.coord_toggle_btn.pack(side="right")
+
+        lst = labelframe(self, "Danh sách tài khoản")
+        lst.pack(fill="both", expand=True, padx=5, pady=2)
+        account_table_header(lst, [("Nhân vật", 18), ("Tọa độ bán", 14), ("Tọa độ Train", 14)])
+        self.account_body = tk.Frame(lst, bg=BG)
+        self.account_body.grid(row=1, column=0, columnspan=3, sticky="nsew")
+        lst.grid_columnconfigure(0, weight=1)
+        lst.grid_columnconfigure(1, weight=1)
+        lst.grid_columnconfigure(2, weight=1)
+
+        bar = tk.Frame(self, bg=BG)
+        bar.pack(side="bottom", fill="x", padx=7)
+        tk.Label(bar, text="Điều khiển tất cả:", bg=BG, font=("Segoe UI", 9, "bold")).pack(side="left")
+        button(bar, "Tới bán đồ", lambda: self._move_all("sell"), "blue").pack(side="left", padx=2)
+        button(bar, "Bán đồ", self._sell_all_pending, "blue").pack(side="left", padx=2)
+        button(bar, "Tới bãi train", lambda: self._move_all("farm"), "blue").pack(side="left", padx=2)
+        button(bar, "Đánh", self._fight_all, "blue").pack(side="left", padx=2)
+        self.start_button = start_bar(self, self._toggle_farm)
+
+        self._load_coords()
+        self._save_config()
+        self.after(100, self._refresh_accounts)
+
+    def _toggle_town_config(self):
+        self.town_extra_visible = not self.town_extra_visible
+        if self.town_extra_visible:
+            self.town_extra.pack(fill="x", padx=4, pady=(0, 2))
+        else:
+            self.town_extra.pack_forget()
+
+    def _add_buff_placeholder(self):
+        self.app.set_status("[Train] Buff theo thời gian đang chờ port đúng runtime TLM.")
+
+    def _save_config(self):
+        self.store.set("Farm", "town_condition", self.town_condition.get())
+        self.store.set("Farm", "loop_minutes", max(1, int(self.loop_minutes.get() or 1)))
+        self.store.set("Farm", "respawn", self.respawn.get())
+        self.store.set("Farm", "auto_reconnect", self.auto_reconnect.get())
+        self.store.set("Farm", "pickup_no_cankhon", self.pickup_no_cankhon.get())
+        self.store.set("Farm", "heal_after_death", self.heal_after_death.get())
+        self.store.set("Farm", "pickup_mode", self.pickup_mode.get())
+        self.store.set("Farm", "heal_map", self.heal_map.get())
+        self.store.save()
+
+    def _coord_names(self):
+        return [row["name"].get().strip() for row in self.coord_rows if row["name"].get().strip()]
+
+    def _coord_record(self, name: str):
+        for row in self.coord_rows:
+            if row["name"].get().strip() != name:
+                continue
+            map_name = row["map"].get().strip()
+            try:
+                x = int(row["x"].get())
+                y = int(row["y"].get())
+            except (TypeError, ValueError):
+                return None
+            map_id = map_name_to_id().get(map_name, 0)
+            if map_id <= 0:
+                return None
+            return {"name": name, "map_name": map_name, "map_id": map_id, "x": x, "y": y}
+        return None
+
+    def _save_coords(self):
+        rows = []
+        for row in self.coord_rows:
+            name = row["name"].get().strip()
+            map_name = row["map"].get().strip()
+            try:
+                x, y = int(row["x"].get()), int(row["y"].get())
+            except (TypeError, ValueError):
+                x, y = 0, 0
+            if name:
+                rows.append({"name": name, "map": map_name, "x": x, "y": y})
+        self.store.set("Farm", "coords", rows)
+        self.store.save()
+        self._refresh_coord_choices()
+
+    def _load_coords(self):
+        for rec in self.store.get_json("Farm", "coords", []):
+            if isinstance(rec, dict):
+                self._add_coord_row(rec, save=False)
+        self._refresh_coord_choices()
+
+    def _add_coord_row(self, rec=None, save=True):
+        if rec is None:
+            rec = {
+                "name": f"Tọa độ {len(self.coord_rows) + 1}",
+                "map": "Đại Lý",
+                "x": 0,
+                "y": 0,
+            }
+        frame = tk.Frame(self.coord_body, bg=BG)
+        frame.pack(fill="x", pady=1)
+        name = tk.StringVar(value=str(rec.get("name", "")))
+        map_var = tk.StringVar(value=str(rec.get("map", "Đại Lý")))
+        x_var = tk.StringVar(value=str(rec.get("x", 0)))
+        y_var = tk.StringVar(value=str(rec.get("y", 0)))
+        name_entry = tk.Entry(frame, textvariable=name, width=9)
+        name_entry.pack(side="left")
+        map_cb = ttk.Combobox(frame, textvariable=map_var, values=map_names(), state="readonly", width=11)
+        map_cb.pack(side="left", padx=1)
+        x_entry = tk.Entry(frame, textvariable=x_var, width=4)
+        x_entry.pack(side="left", padx=1)
+        y_entry = tk.Entry(frame, textvariable=y_var, width=4)
+        y_entry.pack(side="left", padx=1)
+        row = {"frame": frame, "name": name, "map": map_var, "x": x_var, "y": y_var}
+        button(frame, "Train", lambda r=row: self._apply_coord_to_all(r), "green", width=8).pack(side="left", padx=1)
+        button(frame, "✕", lambda r=row: self._remove_coord_row(r), "red", width=2).pack(side="left", padx=1)
+        self.coord_rows.append(row)
+        for widget in (name_entry, x_entry, y_entry):
+            widget.bind("<FocusOut>", lambda _e: self._save_coords())
+        map_cb.bind("<<ComboboxSelected>>", lambda _e: self._save_coords())
+        if save:
+            self._save_coords()
+        return row
+
+    def _remove_coord_row(self, row):
+        if row not in self.coord_rows:
+            return
+        row["frame"].destroy()
+        self.coord_rows.remove(row)
+        self._save_coords()
+
+    def _toggle_coord_list(self):
+        visible = self.coord_content.winfo_ismapped()
+        if visible:
+            self.coord_content.pack_forget()
+            self.coord_toggle_btn.config(text="Hiện danh sách tọa độ")
+        else:
+            self.coord_content.pack(fill="x", padx=4, pady=(2, 0), before=self.coord_toggle_btn.master)
+            self.coord_toggle_btn.config(text="Ẩn danh sách tọa độ")
+
+    def _apply_coord_to_all(self, coord_row):
+        name = coord_row["name"].get().strip()
+        if not name:
+            return
+        for row in self.account_rows.values():
+            row["farm"].set(name)
+        self._save_account_config()
+
+    def _refresh_coord_choices(self):
+        values = self._coord_names()
+        for row in self.account_rows.values():
+            row["sell_cb"].configure(values=values)
+            row["farm_cb"].configure(values=values)
+            if row["sell"].get() not in values:
+                row["sell"].set("")
+            if row["farm"].get() not in values:
+                row["farm"].set(values[0] if values else "")
+
+    def _save_account_config(self):
+        data = {}
+        for row in self.account_rows.values():
+            name = row["name"].get().strip()
+            if not name:
+                continue
+            data[name] = {
+                "enabled": row["enabled"].get(),
+                "sell": row["sell"].get(),
+                "farm": row["farm"].get(),
+            }
+        self.account_config = data
+        self.store.set("Farm", "accounts", data)
+        self.store.save()
+
+    def _refresh_accounts(self):
+        if self._closed:
+            return
+        if self._refresh_busy:
+            self.after(self.REFRESH_MS, self._refresh_accounts)
+            return
+        self._refresh_busy = True
+        windows = self.backend.windows()
+
+        def worker():
+            infos = []
+            for gw in windows:
+                snap = self.backend.driver.read_snapshot(gw)
+                infos.append((gw, snap))
+            self.after(0, lambda: self._apply_accounts(infos))
+
+        threading.Thread(target=worker, name="tlm-train-refresh", daemon=True).start()
+
+    def _apply_accounts(self, infos):
+        if self._closed:
+            return
+        seen = set()
+        values = self._coord_names()
+        for gw, snap in infos:
+            seen.add(gw.hwnd)
+            row = self.account_rows.get(gw.hwnd)
+            role_name = (snap.name if snap and snap.name else "") or gw.title or f"PID {gw.pid}"
+            if row is None:
+                cfg = self.account_config.get(role_name, {}) if isinstance(self.account_config, dict) else {}
+                frame = tk.Frame(self.account_body, bg=BG)
+                frame.pack(fill="x", pady=1)
+                enabled = tk.BooleanVar(value=bool(cfg.get("enabled", True)))
+                name = tk.StringVar(value=role_name)
+                sell = tk.StringVar(value=str(cfg.get("sell", "")))
+                farm_default = str(cfg.get("farm", values[0] if values else ""))
+                farm = tk.StringVar(value=farm_default)
+                tk.Checkbutton(frame, variable=enabled, bg=BG, command=self._save_account_config).pack(side="left")
+                name_label = tk.Label(frame, textvariable=name, bg=BG, width=14, anchor="w")
+                name_label.pack(side="left")
+                sell_cb = ttk.Combobox(frame, textvariable=sell, values=values, state="readonly", width=10)
+                sell_cb.pack(side="left", padx=1)
+                farm_cb = ttk.Combobox(frame, textvariable=farm, values=values, state="readonly", width=10)
+                farm_cb.pack(side="left", padx=1)
+                row = {
+                    "frame": frame, "gw": gw, "snapshot": snap, "enabled": enabled,
+                    "name": name, "name_label": name_label, "sell": sell, "farm": farm,
+                    "sell_cb": sell_cb, "farm_cb": farm_cb,
+                }
+                play = button(frame, "▶", lambda r=row: self._toggle_single_farm(r), "green", width=2)
+                play.pack(side="left", padx=1)
+                row["play"] = play
+                sell_cb.bind("<<ComboboxSelected>>", lambda _e: self._save_account_config())
+                farm_cb.bind("<<ComboboxSelected>>", lambda _e: self._save_account_config())
+                self.account_rows[gw.hwnd] = row
+            else:
+                row["gw"] = gw
+                row["snapshot"] = snap
+                if role_name and row["name"].get() != role_name:
+                    row["name"].set(role_name)
+            if snap:
+                row["name_label"].config(fg=GREEN if snap.map_ready else GRAY)
+        for hwnd in list(self.account_rows):
+            if hwnd in seen:
+                continue
+            row = self.account_rows.pop(hwnd)
+            stop = self._session_stops.pop(hwnd, None)
+            if stop:
+                stop.set()
+            row["frame"].destroy()
+        self._refresh_busy = False
+        self._refresh_coord_choices()
+        self.after(self.REFRESH_MS, self._refresh_accounts)
+
+    def _checked_rows(self):
+        return [row for row in self.account_rows.values() if row["enabled"].get()]
+
+    def _row_coord(self, row, kind):
+        return self._coord_record(row[kind].get())
+
+    @staticmethod
+    def _at_coord(snapshot, coord):
+        if not snapshot or not snapshot.map_ready or snapshot.waiting_change_map:
+            return False
+        if snapshot.map_id != coord["map_id"]:
+            return False
+        dx = int(snapshot.x) - int(coord["x"])
+        dy = int(snapshot.y) - int(coord["y"])
+        return dx * dx + dy * dy <= TrainTab.ARRIVE_TOLERANCE * TrainTab.ARRIVE_TOLERANCE
+
+    def _set_row_state(self, row, text, running=None):
+        def apply():
+            if row["frame"].winfo_exists():
+                row["name_label"].config(text=f'{row["name"].get()} • {text}')
+                if running is not None:
+                    row["play"].config(text="■" if running else "▶", bg="#d12228" if running else GREEN)
+        self.after(0, apply)
+
+    def _move_worker(self, row, coord, cancel):
+        gw = row["gw"]
+        snap = self.backend.driver.read_snapshot(gw)
+        if self._at_coord(snap, coord):
+            self._set_row_state(row, "Đã tới")
+            return True
+        result = self.backend.start_path(gw, coord["map_id"], coord["x"], coord["y"])
+        if not result.ok:
+            self._set_row_state(row, "Lỗi di chuyển")
+            self.after(0, lambda t=result.detail: self.app.set_status(f"[Train] {t}"))
+            return False
+        self._set_row_state(row, "Đang di chuyển")
+        deadline = time.monotonic() + 90.0
+        while time.monotonic() < deadline and not cancel.is_set() and not self._stop_all_event.is_set():
+            snap = self.backend.driver.read_snapshot(gw)
+            if self._at_coord(snap, coord):
+                if snap and snap.auto_pathing:
+                    self.backend.stop_path(gw)
+                self._set_row_state(row, "Đã tới")
+                return True
+            time.sleep(.25)
+        self.backend.stop_path(gw)
+        self._set_row_state(row, "Di chuyển timeout")
+        return False
+
+    def _fight_worker(self, row, cancel):
+        gw = row["gw"]
+        result = self.backend.start_auto_fight(gw)
+        if not result.ok:
+            self._set_row_state(row, "Không bật Đánh")
+            self.after(0, lambda t=result.detail: self.app.set_status(f"[Train] {t}"))
+            return False
+        deadline = time.monotonic() + 6.0
+        while time.monotonic() < deadline and not cancel.is_set() and not self._stop_all_event.is_set():
+            snap = self.backend.driver.read_snapshot(gw)
+            if snap and snap.auto_fight:
+                self._set_row_state(row, "Đang đánh", True)
+                return True
+            time.sleep(.2)
+        self._set_row_state(row, "Chưa xác nhận Đánh")
+        return False
+
+    def _move_all(self, kind):
+        rows = self._checked_rows()
+        if not rows:
+            self.app.set_status("[Train] Chưa chọn tài khoản.")
+            return
+        jobs = []
+        for row in rows:
+            coord = self._row_coord(row, kind)
+            if not coord:
+                self.app.set_status(f"[Train] {row['name'].get()}: chưa chọn tọa độ {kind}.")
+                continue
+            jobs.append((row, coord))
+        if not jobs:
+            return
+        cancel = threading.Event()
+
+        def run():
+            for row, coord in jobs:
+                if cancel.is_set():
+                    break
+                self._move_worker(row, coord, cancel)
+
+        threading.Thread(target=run, name=f"tlm-train-move-{kind}", daemon=True).start()
+
+    def _fight_all(self):
+        rows = self._checked_rows()
+        if not rows:
+            self.app.set_status("[Train] Chưa chọn tài khoản.")
+            return
+        cancel = threading.Event()
+        for row in rows:
+            threading.Thread(
+                target=self._fight_worker, args=(row, cancel),
+                name=f"tlm-train-fight-{row['gw'].pid}", daemon=True,
+            ).start()
+
+    def _sell_all_pending(self):
+        self.app.set_status("[Train] Bán đồ đang chờ port primitive bag/shop từ 12.4.2.")
+
+    def _toggle_single_farm(self, row):
+        hwnd = row["gw"].hwnd
+        active = self._session_stops.get(hwnd)
+        if active is not None:
+            active.set()
+            return
+        coord = self._row_coord(row, "farm")
+        if not coord:
+            self.app.set_status(f"[Train] {row['name'].get()}: chưa chọn tọa độ Train.")
+            return
+        self._save_config()
+        self._save_account_config()
+        cancel = threading.Event()
+        self._session_stops[hwnd] = cancel
+        config = {
+            "respawn": self.respawn.get(),
+            "town_condition": self.town_condition.get(),
+            "loop_minutes": max(1, int(self.loop_minutes.get() or 1)),
+            "heal_after_death": self.heal_after_death.get(),
+            "auto_reconnect": self.auto_reconnect.get(),
+        }
+        self._set_row_state(row, "Khởi động", True)
+        threading.Thread(
+            target=self._farm_worker, args=(row, coord, config, cancel),
+            name=f"tlm-train-{row['gw'].pid}", daemon=True,
+        ).start()
+
+    def _farm_worker(self, row, coord, config, cancel):
+        gw = row["gw"]
+        started = time.monotonic()
+        try:
+            if not self._move_worker(row, coord, cancel):
+                return
+            if not self._fight_worker(row, cancel):
+                return
+            while not cancel.wait(.75) and not self._stop_all_event.is_set():
+                snap = self.backend.driver.read_snapshot(gw)
+                if not snap:
+                    self._set_row_state(row, "Chờ snapshot", True)
+                    continue
+                if snap.is_dead:
+                    self.backend.stop_auto_fight(gw)
+                    if not config["respawn"]:
+                        self._set_row_state(row, "Đã chết")
+                        return
+                    self._set_row_state(row, "Đầu thai", True)
+                    result = self.backend.revive_normal(gw)
+                    if not result.ok:
+                        self.after(0, lambda t=result.detail: self.app.set_status(f"[Train] {t}"))
+                        return
+                    deadline = time.monotonic() + 20.0
+                    revived = None
+                    while time.monotonic() < deadline and not cancel.is_set():
+                        revived = self.backend.driver.read_snapshot(gw)
+                        if revived and not revived.is_dead and revived.map_ready:
+                            break
+                        time.sleep(.3)
+                    if not revived or revived.is_dead:
+                        self._set_row_state(row, "Hồi sinh timeout")
+                        return
+                    if config["heal_after_death"]:
+                        self.after(0, lambda: self.app.set_status("[Train] Trị liệu sau chết chờ treatment primitive."))
+                    if not self._move_worker(row, coord, cancel):
+                        return
+                    if not self._fight_worker(row, cancel):
+                        return
+                    started = time.monotonic()
+                    continue
+
+                if config["town_condition"] == "bag" and snap.free_bag_space == 0:
+                    self.backend.stop_auto_fight(gw)
+                    self._set_row_state(row, "Túi đầy • chờ Bán")
+                    self.after(0, lambda: self.app.set_status("[Train] Túi đầy: sell workflow chưa được port, đã dừng an toàn."))
+                    return
+                if config["town_condition"] == "period" and time.monotonic() - started >= config["loop_minutes"] * 60:
+                    self.backend.stop_auto_fight(gw)
+                    self._set_row_state(row, "Đến chu kỳ • chờ Bán")
+                    self.after(0, lambda: self.app.set_status("[Train] Đến chu kỳ về thành: sell/town workflow chưa được port, đã dừng an toàn."))
+                    return
+                if not snap.auto_fight and snap.map_ready and not snap.waiting_change_map:
+                    if not self._fight_worker(row, cancel):
+                        return
+        finally:
+            try:
+                self.backend.stop_auto_fight(gw)
+            except Exception:
+                pass
+            self.after(0, lambda h=gw.hwnd, r=row: self._session_finished(h, r))
+
+    def _session_finished(self, hwnd, row):
+        self._session_stops.pop(hwnd, None)
+        self._set_row_state(row, "Chờ", False)
+        if not self._session_stops:
+            self._running = False
+            self.start_button.config(text="Bắt đầu", bg=GREEN)
+
+    def _toggle_farm(self):
+        if self._running or self._session_stops:
+            self._stop_all()
+            return
+        rows = self._checked_rows()
+        if not rows:
+            self.app.set_status("[Train] Chưa chọn tài khoản.")
+            return
+        missing = [row["name"].get() for row in rows if not self._row_coord(row, "farm")]
+        if missing:
+            self.app.set_status(f"[Train] Chưa chọn tọa độ Train: {', '.join(missing[:3])}")
+            return
+        self._stop_all_event.clear()
+        self._running = True
+        self.start_button.config(text="Dừng", bg="#d12228")
+        for row in rows:
+            self._toggle_single_farm(row)
+
+    def _stop_all(self):
+        self._stop_all_event.set()
+        for stop in list(self._session_stops.values()):
+            stop.set()
+        rows = list(self.account_rows.values())
+
+        def worker():
+            for row in rows:
+                try:
+                    self.backend.stop_auto_fight(row["gw"])
+                    self.backend.stop_path(row["gw"])
+                except Exception:
+                    pass
+            self.after(0, self._finish_stop_all)
+
+        threading.Thread(target=worker, name="tlm-train-stop-all", daemon=True).start()
+
+    def _finish_stop_all(self):
+        self._running = False
+        self.start_button.config(text="Bắt đầu", bg=GREEN)
+        self.app.set_status("[Train] Đã gửi dừng.")
+
+    def stop(self):
+        self._closed = True
+        self._stop_all_event.set()
+        for stop in self._session_stops.values():
+            stop.set()
+        self._save_config()
+        self._save_coords()
+        self._save_account_config()
 
 
 class TrainLsvTab(BaseTab):
