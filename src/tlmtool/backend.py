@@ -159,6 +159,21 @@ class SemanticDriver:
             return ActionResult(False, f"Workflow {action.value} cần cấu hình/target cụ thể")
         return self.raw(gw, *args)
 
+    def party_create(self, gw: GameWindow) -> ActionResult:
+        return self.raw(gw, Command.PARTY_CREATE)
+
+    def party_leave(self, gw: GameWindow) -> ActionResult:
+        return self.raw(gw, Command.PARTY_LEAVE)
+
+    def party_invite(self, gw: GameWindow, target_role_id: int) -> ActionResult:
+        return self.raw(gw, Command.PARTY_INVITE, int(target_role_id))
+
+    def party_join(self, gw: GameWindow, leader_role_id: int) -> ActionResult:
+        return self.raw(gw, Command.PARTY_JOIN, int(leader_role_id))
+
+    def revive_normal(self, gw: GameWindow) -> ActionResult:
+        return self.raw(gw, Command.REVIVE_NORMAL)
+
     def reload(self, gw: GameWindow) -> ActionResult:
         # Reload is an account/login workflow in TLM, not a generic gameplay
         # mutation. Keep it feature-level so it can verify the actual login UI.
