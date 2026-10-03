@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
-from .model import GameWindow, LocalRoleSnapshot
+from .model import BagItemSnapshot, GameWindow, LocalRoleSnapshot
 from .winapi import WindowsApi
 from .native_client import Command, RuntimeBridgeManager
 
@@ -155,6 +155,9 @@ class TlmBackend:
     def sell_bag_item(self, gw: GameWindow, instance_id: int, item_id: int) -> ActionResult:
         return self._semantic(gw, lambda: self.driver.sell_bag_item(gw, instance_id, item_id))
 
+    def sell_bag_item_verified(self, gw: GameWindow, instance_id: int, item_id: int) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.sell_bag_item_verified(gw, instance_id, item_id))
+
 
 class SemanticDriver:
     """Windows semantic bridge adapter.
@@ -238,6 +241,70 @@ class SemanticDriver:
     def sell_bag_item(self, gw: GameWindow, instance_id: int, item_id: int) -> ActionResult:
         low, high = self._split_i64(instance_id)
         return self.raw(gw, Command.SELL_BAG_ITEM, low, high, int(item_id), 3.0)
+
+    def read_bag(self, gw: GameWindow) -> tuple[list[BagItemSnapshot], int] | None:
+        items: list[BagItemSnapshot] = []
+        start = 0
+        free_space = -1
+        for _page in range(64):
+            reply = self.read_bag_page(gw, start)
+            if reply is None or not reply.ok:
+                return None
+            page = reply.bag
+            free_space = int(page.freeBagSpace)
+            count = max(0, min(int(page.pageCount), len(page.items)))
+            for i in range(count):
+                item = page.items[i]
+                items.append(BagItemSnapshot(
+                    instance_id=int(item.instanceID),
+                    item_id=int(item.itemID),
+                    site=int(item.site),
+                    position=int(item.position),
+                    quantity=int(item.quantity),
+                    bound=bool(item.bound),
+                    throwable=bool(item.throwable),
+                    sellable=bool(item.sellable),
+                    is_equip=bool(item.isEquip),
+                    is_weapon=bool(item.isWeapon),
+                    name=str(item.name),
+                    item_type=str(item.itemType),
+                    equip_type=str(item.equipType),
+                ))
+            total = max(0, int(page.totalCount))
+            start += count
+            if count == 0 or start >= total:
+                return items, free_space
+        self._load_error = "Bag scan vượt giới hạn 64 page"
+        return None
+
+    def sell_bag_item_verified(self, gw: GameWindow, instance_id: int, item_id: int) -> ActionResult:
+        before = self.read_bag(gw)
+        if before is None:
+            return ActionResult(False, "Không đọc được tay nải trước khi bán")
+        current = next(
+            (x for x in before[0] if x.instance_id == int(instance_id) and x.item_id == int(item_id) and x.site == 10),
+            None,
+        )
+        if current is None:
+            return ActionResult(False, "Item instance đã đổi/mất; yêu cầu re-scan")
+        if not current.sellable:
+            return ActionResult(False, "Item hiện tại IsItemSellable=false; chặn bán")
+        if 40_000_000 <= current.item_id < 50_000_000:
+            return ActionResult(False, "Item quest-family; chặn bán")
+
+        sent = self.sell_bag_item(gw, current.instance_id, current.item_id)
+        if not sent.ok:
+            return sent
+
+        deadline = time.monotonic() + 4.0
+        while time.monotonic() < deadline:
+            time.sleep(0.20)
+            after = self.read_bag(gw)
+            if after is None:
+                continue
+            if not any(x.instance_id == current.instance_id for x in after[0]):
+                return ActionResult(True, f"Đã bán và xác nhận remove instance={current.instance_id}")
+        return ActionResult(False, "Đã gửi bán nhưng chưa xác nhận item biến mất")
 
     def reload(self, gw: GameWindow) -> ActionResult:
         # Reload is an account/login workflow in TLM, not a generic gameplay
