@@ -68,3 +68,28 @@ def test_post_login_dispatch_uses_tab_specific_workflows():
     assert '"Train LSV": (4, "_toggle_farm")' in block
     assert '"Dồn vàng": (7, "_toggle_farm")' in block
     assert "self.action_all(action)" not in block
+
+
+def test_party_after_action_uses_target_tab_workflow():
+    text = (Path(__file__).parents[1] / "src/tlmtool/app.py").read_text(encoding="utf-8")
+    start = text.index("    def _after_party_action(self):")
+    end = text.index("    def stop(self):", start)
+    block = text[start:end]
+    assert '"Train": (3, "_toggle_farm")' in block
+    assert '"Phó bản": (5, "_toggle_run")' in block
+    assert "self.action_all(action)" not in block
+
+
+def test_train_core_is_orchestrated_not_generic_action_only():
+    text = (Path(__file__).parents[1] / "src/tlmtool/app.py").read_text(encoding="utf-8")
+    start = text.index("class TrainTab(BaseTab):")
+    end = text.index("class TrainLsvTab(BaseTab):", start)
+    block = text[start:end]
+    for method in [
+        "def _refresh_accounts", "def _move_worker", "def _fight_worker",
+        "def _farm_worker", "def _toggle_farm", "def _stop_all",
+    ]:
+        assert method in block
+    assert 'start_bar(self, self._toggle_farm)' in block
+    assert "lambda:self.action_all(Action.TRAIN)" not in block
+    assert "ARRIVE_TOLERANCE = 40" in block
