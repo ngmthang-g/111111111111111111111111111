@@ -1005,18 +1005,27 @@ class PartyTab(BaseTab):
 
     def _after_party_action(self):
         mode = self.after.get()
-        mapping = {
-            "Train": (3, Action.TRAIN),
-            "Train LSV": (4, Action.TRAIN_LSV),
-            "Dồn vàng": (7, Action.DON_VANG),
-            "Phó bản": (5, Action.PHO_BAN),
+        targets = {
+            "Train": (3, "_toggle_farm"),
+            "Train LSV": (4, "_toggle_farm"),
+            "Dồn vàng": (7, "_toggle_farm"),
+            "Phó bản": (5, "_toggle_run"),
         }
-        target = mapping.get(mode)
+        target = targets.get(mode)
         if not target:
             return
-        tab_index, action = target
+        tab_index, method_name = target
         self.app.notebook.select(tab_index)
-        self.after(350, lambda: self.action_all(action))
+
+        def activate():
+            tab = self.app.tabs[tab_index]
+            method = getattr(tab, method_name, None)
+            if callable(method):
+                method()
+            else:
+                self.app.set_status(f"[Party] Sau khi party={mode}: workflow đang chờ hoàn thiện.")
+
+        self.after(350, activate)
 
     def stop(self):
         self._closed = True
@@ -1723,6 +1732,7 @@ class TLMApplication:
         for tab in self.tabs:
             if isinstance(tab,LoginTab): tab.save_accounts(); tab.schedule.stop()
             if isinstance(tab,PartyTab): tab.stop()
+            if isinstance(tab,TrainTab): tab.stop()
             if isinstance(tab,ToiUuTab): tab.monitor.stop()
         self.store.save(); self.backend.driver.close(); self.root.destroy()
 
