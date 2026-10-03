@@ -200,18 +200,64 @@ bool ToggleRide(bool desired,wchar_t*d,size_t cap){Classes c{};if(!ResolveClasse
 bool FindUi(const Classes&c,const char*name,Il2CppObject*&ui,wchar_t*d,size_t cap){if(!c.gui){SetText(d,cap,L"LuaSystemAPI_GUI chưa resolve");return false;}auto*m=FindMethod(c.gui,"FindUI",1,true);if(!m)m=FindMethod(c.gui,"MainFindUI",1,true);if(!m)return false;Il2CppString*s=g_api.string_new(name);void*args[]={&s};return InvokeObj(m,nullptr,args,ui,d,cap)&&ui;}
 bool AutoFight(bool start,wchar_t*d,size_t cap){Classes c{};if(!ResolveClasses(c,d,cap)||!Safe(c,d,cap))return false;Il2CppObject*ui=nullptr;if(!FindUi(c,"AutoFight_Main",ui,d,cap))return false;auto*k=g_api.object_get_class(ui);auto*m=FindMethod(k,"StartAutoFight",1,false);if(!m){SetText(d,cap,L"StartAutoFight không phải managed method trên UI build này");return false;}int32_t mode=start?1:0;void*args[]={&mode};if(!InvokeVoid(m,ui,args,d,cap))return false;SetText(d,cap,start?L"Đã StartAutoFight(Train)":L"Đã StopAutoFight");return true;}
 
+const MethodInfo* BagListMethod(const Classes&c){
+    auto*m=FindMethod(c.game,"GetItemsAtSite",1,true);if(m)return m;
+    return FindMethod(c.shared,"GetItemsAtSite",1,true);
+}
 const MethodInfo* BagItemAtSiteMethod(const Classes&c){
     auto*m=FindMethod(c.game,"GetItemAtSite",2,true);if(m)return m;
     return FindMethod(c.shared,"GetItemAtSite",2,true);
 }
-bool ReadBagObjects(const Classes&c,std::vector<Il2CppObject*>&items,int&freeSpace,wchar_t*d,size_t cap){
-    items.clear();freeSpace=-1;auto*m=BagItemAtSiteMethod(c);if(!m){SetText(d,cap,L"Không resolve GetItemAtSite");return false;}
-    int successful=0;std::int32_t site=10;
-    for(std::int32_t pos=0;pos<=100;++pos){void*args[]={&site,&pos};Il2CppObject*item=nullptr;wchar_t ignored[96]{};
+bool LooksLikeBagItemObject(Il2CppObject*object){
+    if(!object)return false;Il2CppClass*k=g_api.object_get_class(object);if(!k)return false;
+    return FindField(k,"ID")||FindMethod(k,"get_ID",0,false)
+        ? (FindField(k,"ItemID")||FindMethod(k,"get_ItemID",0,false))!=nullptr
+        : false;
+}
+bool TryUnwrapBagEnumeratorCurrent(Il2CppObject*current,Il2CppObject*&item){
+    item=nullptr;if(!current)return true;if(LooksLikeBagItemObject(current)){item=current;return true;}
+    Il2CppClass*k=g_api.object_get_class(current);auto*m=k?FindMethod(k,"get_Value",0,false):nullptr;if(!m)return false;
+    wchar_t ignored[96]{};Il2CppObject*value=nullptr;if(!InvokeObj(m,current,nullptr,value,ignored,ArrayCount(ignored)))return false;
+    if(!value||!LooksLikeBagItemObject(value))return false;item=value;return true;
+}
+bool TryReadBagIndexed(Il2CppObject*collection,Il2CppClass*cc,std::vector<Il2CppObject*>&items){
+    items.clear();int32_t count=0;wchar_t ignored[128]{};
+    if(!GetterI32(cc,"get_Count",collection,count,ignored,ArrayCount(ignored))||count<0||count>1000)return false;
+    auto*getItem=FindMethod(cc,"get_Item",1,false);if(!getItem)return false;
+    std::vector<Il2CppObject*>candidate;candidate.reserve(static_cast<size_t>(count));
+    for(int32_t i=0;i<count;++i){int32_t index=i;void*args[]={&index};Il2CppObject*item=nullptr;wchar_t itemError[96]{};
+        if(!InvokeObj(getItem,collection,args,item,itemError,ArrayCount(itemError)))return false;if(item)candidate.push_back(item);}
+    items.swap(candidate);return true;
+}
+bool TryReadBagEnumerator(Il2CppObject*collection,Il2CppClass*cc,std::vector<Il2CppObject*>&items){
+    items.clear();auto*getEnumerator=FindMethod(cc,"GetEnumerator",0,false);if(!getEnumerator)return false;
+    Il2CppObject*enumerator=nullptr;wchar_t ignored[128]{};
+    if(!InvokeObj(getEnumerator,collection,nullptr,enumerator,ignored,ArrayCount(ignored))||!enumerator)return false;
+    Il2CppClass*ec=g_api.object_get_class(enumerator);if(!ec)return false;
+    auto*moveNext=FindMethod(ec,"MoveNext",0,false);auto*getCurrent=FindMethod(ec,"get_Current",0,false);if(!moveNext||!getCurrent)return false;
+    std::vector<Il2CppObject*>candidate;candidate.reserve(100);
+    for(int guard=0;guard<1000;++guard){std::int64_t moved=0;wchar_t stepError[96]{};
+        if(!InvokeScalar64(moveNext,enumerator,nullptr,moved,stepError,ArrayCount(stepError)))return false;
+        if(!moved){items.swap(candidate);return true;}
+        Il2CppObject*current=nullptr;if(!InvokeObj(getCurrent,enumerator,nullptr,current,stepError,ArrayCount(stepError)))return false;
+        Il2CppObject*item=nullptr;if(!TryUnwrapBagEnumeratorCurrent(current,item))return false;if(item)candidate.push_back(item);}
+    return false;
+}
+bool TryReadBagByPosition(const Classes&c,std::vector<Il2CppObject*>&items){
+    items.clear();auto*m=BagItemAtSiteMethod(c);if(!m)return false;
+    std::vector<Il2CppObject*>candidate;candidate.reserve(100);int successful=0;int32_t site=10;
+    for(int32_t pos=0;pos<=100;++pos){void*args[]={&site,&pos};Il2CppObject*item=nullptr;wchar_t ignored[96]{};
         if(!InvokeObj(m,nullptr,args,item,ignored,ArrayCount(ignored)))continue;++successful;if(!item)continue;
-        if(std::find(items.begin(),items.end(),item)==items.end())items.push_back(item);
-    }
-    if(successful==0){SetText(d,cap,L"GetItemAtSite(Bag) không phản hồi");return false;}
+        if(std::find(candidate.begin(),candidate.end(),item)==candidate.end())candidate.push_back(item);}
+    if(successful==0)return false;items.swap(candidate);return true;
+}
+bool ReadBagObjects(const Classes&c,std::vector<Il2CppObject*>&items,int&freeSpace,wchar_t*d,size_t cap){
+    items.clear();freeSpace=-1;bool readOk=false;
+    if(auto*list=BagListMethod(c)){int32_t site=10;void*args[]={&site};Il2CppObject*collection=nullptr;
+        if(InvokeObj(list,nullptr,args,collection,d,cap)&&collection){Il2CppClass*cc=g_api.object_get_class(collection);
+            if(cc){readOk=TryReadBagIndexed(collection,cc,items);if(!readOk)readOk=TryReadBagEnumerator(collection,cc,items);}}}
+    if(!readOk)readOk=TryReadBagByPosition(c,items);
+    if(!readOk){SetText(d,cap,L"Không enumerate được tay nải qua GetItemsAtSite/GetItemAtSite");return false;}
     wchar_t ignored[96]{};int32_t freeBag=-1;if(InvokeI32(FindMethod(c.game,"GetFreeBagSpace",0,true),nullptr,nullptr,freeBag,ignored,ArrayCount(ignored))&&freeBag>=0)freeSpace=freeBag;
     return true;
 }
