@@ -111,3 +111,12 @@ def test_semantic_driver_exposes_fresh_bag_sell_contract():
     assert "Command.READ_BAG_PAGE" in text
     assert "Command.SELL_BAG_ITEM" in text
     assert "def _split_i64" in text
+
+
+def test_verified_sell_rechecks_live_bag_before_and_after():
+    text = (Path(__file__).parents[1] / "src/tlmtool/backend.py").read_text(encoding="utf-8")
+    assert "def read_bag(self, gw: GameWindow)" in text
+    assert "def sell_bag_item_verified" in text
+    assert "Item instance đã đổi/mất; yêu cầu re-scan" in text
+    assert "Đã bán và xác nhận remove instance=" in text
+    assert "Đã gửi bán nhưng chưa xác nhận item biến mất" in text
