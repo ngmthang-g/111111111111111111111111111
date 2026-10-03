@@ -306,6 +306,37 @@ class SemanticDriver:
                 return ActionResult(True, f"Đã bán và xác nhận remove instance={current.instance_id}")
         return ActionResult(False, "Đã gửi bán nhưng chưa xác nhận item biến mất")
 
+    def list_sellable(self, gw: GameWindow, item_types: tuple[str, ...] = ("Equip",)) -> list[BagItemSnapshot] | None:
+        bag = self.read_bag(gw)
+        if bag is None:
+            return None
+        allow = {x for x in item_types if x}
+        return [
+            item for item in bag[0]
+            if item.site == 10
+            and item.sellable
+            and not (40_000_000 <= item.item_id < 50_000_000)
+            and (not allow or item.item_type in allow)
+        ]
+
+    def sell_open_shop(self, gw: GameWindow, item_types: tuple[str, ...] = ("Equip",)) -> ActionResult:
+        # Recovered TLM headless contract: default allow-list is Equip, and
+        # every sale is keyed by the live instance ID. The native primitive
+        # itself requires the current NPCShop.SellItemTab to exist.
+        sold = 0
+        for _ in range(100):
+            candidates = self.list_sellable(gw, item_types)
+            if candidates is None:
+                return ActionResult(False, "Không đọc được danh sách item bán")
+            if not candidates:
+                return ActionResult(True, f"Đã hết item phù hợp để bán • sold={sold}")
+            item = candidates[0]
+            result = self.sell_bag_item_verified(gw, item.instance_id, item.item_id)
+            if not result.ok:
+                return result
+            sold += 1
+        return ActionResult(False, "Sell loop chạm chặn an toàn 100 item")
+
     def reload(self, gw: GameWindow) -> ActionResult:
         # Reload is an account/login workflow in TLM, not a generic gameplay
         # mutation. Keep it feature-level so it can verify the actual login UI.
