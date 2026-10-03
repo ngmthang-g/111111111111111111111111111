@@ -176,6 +176,9 @@ class RuntimeBridgeManager:
             hp=s.hp, max_hp=s.maxHP,
             map_id=s.mapID, x=s.x, y=s.y,
             is_dead=bool(s.dead), is_riding=bool(s.riding),
+            auto_pathing=bool(s.autoPathing), auto_fight=bool(s.autoFight),
+            free_bag_space=int(s.freeBagSpace),
+            waiting_change_map=bool(s.waitingChangeMap),
             map_ready=bool(s.mapReady),
         )
 
