@@ -75,6 +75,7 @@ Ordinary process/window arrangement and game launching remain external Win32 ope
 - CPU monitor and TLM-compatible GPU N/A presentation when nvidia-smi path is absent.
 - new x64 semantic bridge protocol and Python attach/client.
 - core native bridge for state/movement/mount/NPC/Train plus TeamID/profile/vitals snapshot fields, create/leave/invite/join Party packets and normal revive.
+- Train source core now includes saved coordinates, per-account scan, move/fight state proof, stop control and normal-revive return-to-spot. Sell/treatment/loot/reconnect remain explicitly pending.
 - Party group workflow matching the recovered TLM order: leave old teams -> prove TeamID empty -> leader creates team -> invite burst -> membership proof -> optional after-party dispatch.
 - TLM Start hide behavior corrected to off-screen (-2200,-2200) rather than SW_HIDE; tight stack is (0,0), diagonal stack is +50/+50.
 
