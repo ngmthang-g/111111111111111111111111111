@@ -51,14 +51,27 @@ class WindowsApi:
         except (psutil.Error, OSError):
             return ""
 
-    def game_windows(self) -> list[GameWindow]:
+    def game_windows(self, include_hidden: bool = True) -> list[GameWindow]:
+        """Enumerate top-level game windows.
+
+        TLM's "Ẩn hết" keeps windows discoverable so "Xem trước"/"Tách rời"
+        can restore them later.  Therefore hidden windows must not disappear
+        from the discovery set.  Callers that explicitly need visible-only
+        windows can pass include_hidden=False.
+        """
         if not self.available:
             return []
         found: list[GameWindow] = []
 
         @self._enum_proc
         def cb(hwnd: int, _lparam: int) -> bool:
-            if not self.user32.IsWindowVisible(hwnd):
+            if not self.user32.IsWindow(hwnd):
+                return True
+            if not include_hidden and not self.user32.IsWindowVisible(hwnd):
+                return True
+            # Ignore owned helper/tool windows from the game process.  The game
+            # client itself is an unowned top-level window.
+            if self.user32.GetWindow(hwnd, 4):  # GW_OWNER
                 return True
             length = self.user32.GetWindowTextLengthW(hwnd)
             title = ctypes.create_unicode_buffer(max(1, length + 1))
@@ -74,9 +87,30 @@ class WindowsApi:
         found.sort(key=lambda w: (w.pid, w.hwnd))
         return found
 
+    def is_window(self, hwnd: int) -> bool:
+        return bool(self.available and hwnd and self.user32.IsWindow(hwnd))
+
+    def is_visible(self, hwnd: int) -> bool:
+        return bool(self.available and hwnd and self.user32.IsWindowVisible(hwnd))
+
+    def is_hung(self, hwnd: int) -> bool:
+        return bool(self.available and hwnd and self.user32.IsHungAppWindow(hwnd))
+
+    def activate(self, hwnd: int) -> bool:
+        if not self.is_window(hwnd):
+            return False
+        if self.user32.IsIconic(hwnd):
+            self.user32.ShowWindow(hwnd, self.SW_RESTORE)
+        else:
+            self.user32.ShowWindow(hwnd, self.SW_SHOW)
+        return bool(self.user32.SetForegroundWindow(hwnd))
+
     def show(self, hwnd: int, visible: bool) -> None:
         if self.available and hwnd:
-            self.user32.ShowWindow(hwnd, self.SW_SHOW if visible else self.SW_HIDE)
+            if visible and self.user32.IsIconic(hwnd):
+                self.user32.ShowWindow(hwnd, self.SW_RESTORE)
+            else:
+                self.user32.ShowWindow(hwnd, self.SW_SHOW if visible else self.SW_HIDE)
 
     def close(self, hwnd: int) -> None:
         if self.available and hwnd:
