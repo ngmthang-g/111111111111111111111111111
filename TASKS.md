@@ -10,14 +10,14 @@ Mỗi task có acceptance riêng. Không đóng task chỉ vì source đã viế
 | T03 | Login | game path/launch, account rows, scheduler, exact click/type/login sequence, after-login | PARTIAL — proxy/captcha/runtime proof pending |
 | T04 | Native semantic bridge | x64 DLL, shared-memory protocol, per-PID attach, state/move/NPC/Train + Party + Revive primitives | WINDOWS BUILD PASS — LIVE RUNTIME PENDING |
 | T05 | Party | create team, leave/invite/join, concurrent groups, wait TeamID proof, after-party dispatch | SOURCE IMPLEMENTED — RUNTIME UNTESTED |
-| T06 | Train | về thành, saved spot, filter/loot/heal/death/reconnect, sell/return/train | UI DONE / ENGINE TODO |
+| T06 | Train | về thành, saved spot, filter/loot/heal/death/reconnect, sell/return/train | CORE SOURCE PARTIAL — saved coords/account scan/move/fight/revive implemented; sell/heal/loot/reconnect/town cycle pending; RUNTIME UNTESTED |
 | T07 | Train LSV | enter/leave LSV, train spot, buff timer, death/heal/reconnect | UI DONE / ENGINE TODO |
 | T08 | Phó Bản | team config + schedule + follow/pick/drop/buff + scenario execution | UI DONE / ENGINE TODO |
 | T09 | Daily | Trừng ác + Tàng bảo đồ + heal/revive/reconnect + bulk controls | UI DONE / ENGINE TODO |
 | T10 | Dồn vàng | return policy, receiver list, trade/session, sell/return/train | UI DONE / ENGINE TODO |
 | T11 | Rao | up to 4 content slots/account, channel/interval, semantic chat send + echo | UI BASELINE DONE / ENGINE TODO |
 | T12 | Tối ưu | CPU/GPU monitor, per-account profile buttons | CPU UI IMPLEMENTED / GAME PROFILE TODO |
-| T13 | Info/update/package | info/free state, updater compatibility, Nuitka standalone build | PARTIAL |
+| T13 | Info/update/package | info/free state, updater compatibility, Nuitka standalone build | STANDALONE BUILD PASS / updater compatibility pending |
 | T14 | 1:1 verification | screenshot diff, control manifest, functional runtime matrix | TODO |
 
 ## T03 subtasks
@@ -29,7 +29,7 @@ Mỗi task có acceptance riêng. Không đóng task chỉ vì source đã viế
 - T03.5 PrintWindow precondition/update-popup detection — pending.
 - T03.6 captcha mode `Không/Tool` behavior — pending; must not auto-solve Captcha.
 - T03.7 proxy/forwarder per account — pending.
-- T03.8 scheduled close/open + after-login dispatch — scheduler implemented; completion proof pending.
+- T03.8 scheduled close/open implemented; after-login now switches to the target tab, waits for its account scan, then invokes that tab workflow. Runtime proof pending.
 
 ## T04 subtasks
 
@@ -49,3 +49,17 @@ Every mutable workflow must follow:
 `fresh snapshot -> guard -> max one mutable action -> state proof -> fresh snapshot`.
 
 Timeout/request-sent is failure/unknown, never success proof.
+
+
+## T06 subtasks
+
+- T06.1 saved coordinate editor + DATA-2222 map catalog — implemented source.
+- T06.2 per-account discovery/snapshot rows and persisted Train/Sell coordinate choice — implemented source.
+- T06.3 direct `Tới bãi train` / `Đánh` primitives with state proof — implemented source.
+- T06.4 Start/Stop Train core loop: move -> prove arrival -> fight -> prove AutoFight; normal revive + return-to-spot — implemented source.
+- T06.5 full-bag/periodic town cycle currently stops fail-closed because semantic sell/shop primitives are not ported yet.
+- T06.6 treatment after death — pending native treatment primitive.
+- T06.7 loot/filter and no-cankhon pickup — pending bag/loot primitives.
+- T06.8 reconnect watchdog — pending exact TLM login/disconnect flow.
+- T06.9 timed buff rows — UI/runtime pending.
+- T06.10 live frozen-client proof — pending.
