@@ -108,10 +108,11 @@ bool ReadState(Snapshot&s,wchar_t*d,size_t cap){
     if(!GetterI32(k,"get_MapID",o,map,d,cap)||map<=0)return false;
     if(!GetterI32(k,"get_PosX",o,x,d,cap)||!GetterI32(k,"get_PosY",o,y,d,cap)){SetText(d,cap,L"Không đọc được PosX/PosY");return false;}
     if(!GetterI32(k,"get_IsRiding",o,riding,d,cap))riding=0;s.roleID=role;s.mapID=map;s.x=x;s.y=y;s.riding=riding?1:0;s.validMask|=ValidIdentity|ValidMap|ValidPosition|ValidRiding;
-    int32_t team=0;if(GetterI32(k,"get_TeamID",o,team,d,cap)){s.teamID=team;s.validMask|=ValidTeam;}
-    int32_t level=0,faction=0;if(GetterI32(k,"get_Level",o,level,d,cap)){s.level=level;s.validMask|=ValidProfile;}if(GetterI32(k,"get_FactionID",o,faction,d,cap)){s.factionID=faction;s.validMask|=ValidProfile;}
-    int32_t hp=0,maxHP=0;if(GetterI32(k,"get_HP",o,hp,d,cap)&&GetterI32(k,"get_MaxHP",o,maxHP,d,cap)){s.hp=hp;s.maxHP=maxHP;s.validMask|=ValidVitals;}
-    int32_t dead=0;if(GetterI32(k,"get_IsDeath",o,dead,d,cap)){s.dead=dead?1:0;s.validMask|=ValidLifeState;}
+    wchar_t optional[160]{};
+    int32_t team=0;if(GetterI32(k,"get_TeamID",o,team,optional,ArrayCount(optional))){s.teamID=team;s.validMask|=ValidTeam;}optional[0]=0;
+    int32_t level=0,faction=0;if(GetterI32(k,"get_Level",o,level,optional,ArrayCount(optional))){s.level=level;s.validMask|=ValidProfile;}optional[0]=0;if(GetterI32(k,"get_FactionID",o,faction,optional,ArrayCount(optional))){s.factionID=faction;s.validMask|=ValidProfile;}optional[0]=0;
+    int32_t hp=0,maxHP=0;if(GetterI32(k,"get_HP",o,hp,optional,ArrayCount(optional))){optional[0]=0;if(GetterI32(k,"get_MaxHP",o,maxHP,optional,ArrayCount(optional))){s.hp=hp;s.maxHP=maxHP;s.validMask|=ValidVitals;}}optional[0]=0;
+    int32_t dead=0;if(GetterI32(k,"get_IsDeath",o,dead,optional,ArrayCount(optional))){s.dead=dead?1:0;s.validMask|=ValidLifeState;}
     int32_t autoFlag=1;if(InvokeI32(FindMethod(c.game,"get_EnableAutoF1",0,true),nullptr,nullptr,autoFlag,d,cap)){s.autoFight=autoFlag?0:1;s.validMask|=ValidAutoFight;}
     int32_t freeBag=-1;if(InvokeI32(FindMethod(c.game,"GetFreeBagSpace",0,true),nullptr,nullptr,freeBag,d,cap)&&freeBag>=0){s.freeBagSpace=freeBag;s.validMask|=ValidBagSpace;}
     auto*instM=FindMethod(c.autoPath,"get_Instance",0,true);Il2CppObject*ap=nullptr;if(InvokeObj(instM,nullptr,nullptr,ap,d,cap)&&ap){auto*ac=g_api.object_get_class(ap);int32_t path=0;if(GetterI32(ac,"get_IsAutoPathing",ap,path,d,cap)){s.autoPathing=path?1:0;s.validMask|=ValidAutoPath;}}
