@@ -28,6 +28,7 @@ class GameWindow:
 class LocalRoleSnapshot:
     pid: int
     captured_ms: int
+    valid_mask: int = 0
     world_generation: int = 0
     role_id: int = 0
     name: str = ""
