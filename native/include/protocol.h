@@ -25,7 +25,7 @@ enum class Command : std::uint32_t {
     ClickInternalPointRawTest = 26, DragInternalPoint = 27,
     ProbeNearbyLoot = 28, PickNearestLoot = 29, ProbeUiDirect = 32,
     InvokeUiDirect = 33, PartyLeave = 34, PartyInvite = 35,
-    PartyJoin = 36, ReviveNormal = 37,
+    PartyJoin = 36, ReviveNormal = 37, PartyCreate = 38,
 };
 
 enum class UiDirectTarget : std::int32_t {
