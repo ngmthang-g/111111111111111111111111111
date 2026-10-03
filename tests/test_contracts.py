@@ -131,3 +131,38 @@ def test_tlm_headless_sell_defaults_to_equipment_and_live_instances():
     assert "item.sellable" in text
     assert "40_000_000 <= item.item_id < 50_000_000" in text
     assert "def sell_open_shop" in text
+
+
+def test_exact_tlm_sell_map_and_pixel_constants_are_locked():
+    from tlmtool.tlm_reference import (
+        PIXEL_DATA, SELL_CONFIRM_STEPS, SELL_MAP_COORDS, SELL_MAP_LIST,
+        SELL_OPEN_CLICKS, sell_slot_pixel,
+    )
+
+    assert SELL_MAP_LIST == (
+        ("Đại Lý", 2), ("Lạc Dương", 3), ("Tô Châu", 4), ("Lâu Lan", 5),
+    )
+    assert SELL_MAP_COORDS == {
+        "Đại Lý": (103, 188),
+        "Lạc Dương": (231, 219),
+        "Tô Châu": (191, 257),
+        "Lâu Lan": (37, 126),
+    }
+    assert SELL_OPEN_CLICKS == ((888, 470), (473, 444))
+    assert SELL_CONFIRM_STEPS[0] == (138, 335, "donVang", "banVatPhamTab", "tab Bán Vật Phẩm")
+    assert PIXEL_DATA["shop"]["tickBanNhanh"]["region"] == (215, 648)
+    assert sell_slot_pixel(0) == ("tuiDoTrong", (730, 190))
+    assert sell_slot_pixel(3) == ("tuiDoTrong3", (925, 190))
+    assert sell_slot_pixel(99) == ("tuiDoTrong6", (1100, 190))
+
+
+def test_train_sell_choices_use_tlm_builtin_presets_plus_manual_coords():
+    text = (Path(__file__).parents[1] / "src/tlmtool/app.py").read_text(encoding="utf-8")
+    start = text.index("class TrainTab(BaseTab):")
+    end = text.index("class TrainLsvTab(BaseTab):", start)
+    block = text[start:end]
+    assert "def _sell_choice_values" in block
+    assert '"======Có sẵn======"' in block
+    assert '"=====Thủ công====="' in block
+    assert "SELL_MAP_COORDS" in block
+    assert 'button(frame, "Bán"' in block
