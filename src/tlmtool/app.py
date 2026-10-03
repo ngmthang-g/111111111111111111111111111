@@ -34,11 +34,34 @@ class StartTab(BaseTab):
     def __init__(self, master, app) -> None:
         super().__init__(master, app)
         mode = labelframe(self, "Chế độ"); mode.pack(fill="x", padx=5, pady=(5, 2))
-        self.mode = tk.StringVar(value="Auto")
-        tk.Radiobutton(mode, text="Auto", value="Auto", variable=self.mode, bg=BG).pack(side="left", padx=5)
-        tk.Radiobutton(mode, text="Xếp lưới", value="Xếp lưới", variable=self.mode, bg=BG).pack(side="left", padx=18)
+        self.mode = tk.StringVar(value=self.store.get("start", "mode", "Auto"))
+        tk.Radiobutton(mode, text="Auto", value="Auto", variable=self.mode, bg=BG, command=self.on_mode_change).pack(side="left", padx=5)
+        tk.Radiobutton(mode, text="Xếp lưới", value="Xếp lưới", variable=self.mode, bg=BG, command=self.on_mode_change).pack(side="left", padx=18)
 
-        quick = labelframe(self, "Điều khiển nhanh"); quick.pack(fill="x", padx=5, pady=2)
+        self.sync_frame = labelframe(self, "Đồng bộ các cửa sổ")
+        sync_top = tk.Frame(self.sync_frame, bg=BG); sync_top.pack(fill="x", padx=4, pady=2)
+        self.grid_cols = tk.IntVar(value=max(1, min(9, self.store.get_int("start", "grid_cols", 2))))
+        self.grid_rows = tk.IntVar(value=max(1, min(9, self.store.get_int("start", "grid_rows", 2))))
+        button(sync_top, "－", lambda:self.change_grid("cols",-1), "gray", width=2).pack(side="left")
+        tk.Label(sync_top,text="Cột:",bg=BG,font=("Segoe UI",9,"bold")).pack(side="left",padx=(3,0))
+        self.grid_cols_label=tk.Label(sync_top,text=str(self.grid_cols.get()),bg=BG,width=2); self.grid_cols_label.pack(side="left")
+        button(sync_top, "＋", lambda:self.change_grid("cols",1), "gray", width=2).pack(side="left")
+        tk.Label(sync_top,text="   ",bg=BG).pack(side="left")
+        button(sync_top, "－", lambda:self.change_grid("rows",-1), "gray", width=2).pack(side="left")
+        tk.Label(sync_top,text="Hàng:",bg=BG,font=("Segoe UI",9,"bold")).pack(side="left",padx=(3,0))
+        self.grid_rows_label=tk.Label(sync_top,text=str(self.grid_rows.get()),bg=BG,width=2); self.grid_rows_label.pack(side="left")
+        button(sync_top, "＋", lambda:self.change_grid("rows",1), "gray", width=2).pack(side="left")
+
+        master=tk.Frame(self.sync_frame,bg=BG); master.pack(fill="x",padx=4,pady=1)
+        tk.Label(master,text="Cửa sổ chính:",bg=BG,font=("Segoe UI",9,"bold")).pack(side="left")
+        self.master_var=tk.StringVar(value=""); self.master_combo=ttk.Combobox(master,textvariable=self.master_var,state="readonly",width=26)
+        self.master_combo.pack(side="left",padx=4,fill="x",expand=True); self.master_combo.bind("<<ComboboxSelected>>",lambda _e:self.apply_grid_layout())
+        sb=tk.Frame(self.sync_frame,bg=BG); sb.pack(fill="x",padx=4,pady=(1,4))
+        self.layout_active=False; self.input_active=False
+        self.layout_btn=button(sb,"Đồng bộ các cửa sổ",self.toggle_layout,"gray"); self.layout_btn.pack(side="left",fill="x",expand=True,padx=(0,2))
+        self.input_btn=button(sb,"Đồng bộ phím chuột",self.toggle_input,"gray"); self.input_btn.pack(side="left",fill="x",expand=True,padx=(2,0))
+
+        quick = labelframe(self, "Điều khiển nhanh"); self.quick_frame=quick; quick.pack(fill="x", padx=5, pady=2)
         q = tk.Frame(quick, bg=BG); q.pack(fill="x", padx=4, pady=3)
         rows = [
             [("Ẩn hết","green",self.hide_all),("Xem trước","green",self.refresh),("Xếp gọn","blue",self.arrange),("Xếp chéo","blue",self.diagonal)],
@@ -70,9 +93,75 @@ class StartTab(BaseTab):
         self.preview.pack(fill="x", padx=4, pady=(2,4))
         lic = labelframe(self, "Thông tin bản quyền"); lic.pack(fill="x", padx=5, pady=2)
         tk.Label(lic,text="Bản quyền FREE vĩnh viễn",fg=GREEN,bg=BG,font=("Segoe UI",9,"bold")).pack(pady=8)
+        self.on_mode_change()
+        self.refresh()
+
+    def save_start_config(self):
+        self.store.set("start","mode",self.mode.get())
+        self.store.set("start","grid_cols",self.grid_cols.get())
+        self.store.set("start","grid_rows",self.grid_rows.get())
+        self.store.set("start","preview_cols",self.columns.get())
+        self.store.save()
+
+    def on_mode_change(self):
+        self.save_start_config()
+        if self.mode.get()=="Xếp lưới":
+            if not self.sync_frame.winfo_ismapped():
+                self.sync_frame.pack(fill="x",padx=5,pady=2,before=self.quick_frame)
+            self.update_master_choices()
+            if not self.layout_active:
+                self.toggle_layout()
+        else:
+            self.sync_frame.pack_forget()
+            self.layout_active=False; self.input_active=False
+            self.layout_btn.config(bg=GRAY); self.input_btn.config(bg=GRAY)
+
+    def change_grid(self,which,delta):
+        var=self.grid_cols if which=="cols" else self.grid_rows
+        var.set(max(1,min(9,var.get()+delta)))
+        self.grid_cols_label.config(text=str(self.grid_cols.get())); self.grid_rows_label.config(text=str(self.grid_rows.get()))
+        self.save_start_config()
+        if self.layout_active: self.apply_grid_layout()
+
+    def update_master_choices(self):
+        wins=self.backend.windows()
+        values=[f"{g.hwnd}|{g.title or ('PID '+str(g.pid))}" for g in wins]
+        self.master_combo.configure(values=values)
+        if self.master_var.get() not in values:
+            self.master_var.set(values[0] if values else "")
+
+    def ordered_windows(self):
+        wins=self.backend.windows()
+        master=self.master_var.get().split("|",1)[0] if self.master_var.get() else ""
+        return sorted(wins,key=lambda g:0 if str(g.hwnd)==master else 1)
+
+    def apply_grid_layout(self):
+        wins=self.ordered_windows()
+        if not wins: return
+        cols=max(1,self.grid_cols.get()); rows=max(1,self.grid_rows.get())
+        sw,sh=self.backend.winapi.screen_size(); ww=max(320,sw//cols); hh=max(240,sh//rows)
+        for i,g in enumerate(wins):
+            col=i%cols; row=(i//cols)%rows
+            self.backend.winapi.move(g.hwnd,col*ww,row*hh,ww,hh)
+        self._windows_hidden=False
+        self.app.set_status(f"[Xếp lưới] {len(wins)} cửa sổ • {cols}x{rows}")
+
+    def toggle_layout(self):
+        self.layout_active=not self.layout_active
+        self.layout_btn.config(bg=GREEN if self.layout_active else GRAY)
+        if self.layout_active: self.apply_grid_layout()
+
+    def toggle_input(self):
+        self.input_active=not self.input_active
+        self.input_btn.config(bg=GREEN if self.input_active else GRAY)
+        if self.input_active:
+            self.app.set_status("[Đồng bộ] phím/chuột chờ InputSync runtime bridge.")
+        else:
+            self.app.set_status("[Đồng bộ] phím/chuột đã tắt.")
 
     def refresh(self):
-        n=len(self.backend.windows()); self.preview.config(text=f"Đã tìm thấy {n} cửa sổ game." if n else "Không tìm thấy cửa sổ game, hãy mở game trước.")
+        wins=self.backend.windows(); self.update_master_choices()
+        self.preview.config(text=f"Đã tìm thấy {len(wins)} cửa sổ game." if wins else "Không tìm thấy cửa sổ game, hãy mở game trước.")
     def hide_all(self):
         windows = self.backend.windows()
         if not windows:
