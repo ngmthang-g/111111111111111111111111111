@@ -8,7 +8,7 @@
 - Platform: Windows x64
 - Frontend: Python 3.10 + Tkinter
 - Native: C++17 x64 semantic bridge
-- Current runtime status: **RUNTIME UNTESTED**
+- Current runtime status: **BUILD PASS / RUNTIME UNTESTED**
 
 ## Evidence baseline
 1. User-supplied TLMTool 2.1.2 distribution and screenshots.
@@ -74,7 +74,12 @@ Ordinary process/window arrangement and game launching remain external Win32 ope
 - account table/scheduler/password toggle/login sequence.
 - CPU monitor and TLM-compatible GPU N/A presentation when nvidia-smi path is absent.
 - new x64 semantic bridge protocol and Python attach/client.
-- core native bridge for state/movement/mount/NPC/Train; remaining 12.4.2 semantic donor actions are tracked in T04.5/T04.6.
+- core native bridge for state/movement/mount/NPC/Train plus TeamID/profile/vitals snapshot fields, create/leave/invite/join Party packets and normal revive.
+- Party group workflow matching the recovered TLM order: leave old teams -> prove TeamID empty -> leader creates team -> invite burst -> membership proof -> optional after-party dispatch.
+- TLM Start hide behavior corrected to off-screen (-2200,-2200) rather than SW_HIDE; tight stack is (0,0), diagonal stack is +50/+50.
+
+### Build-confirmed
+- GitHub Actions Windows x64 builds the native DLL and Nuitka standalone application successfully. First full green build: run `37111235479`, artifact `TLMTool-2.1.2-clone-windows-x64`.
 
 ### Not yet runtime-proven
 Everything above that depends on a real frozen client. See `TASKS.md`.
