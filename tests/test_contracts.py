@@ -56,3 +56,15 @@ def test_native_party_surface_is_implemented_not_enum_only():
     text = (Path(__file__).parents[1] / "native/TlmSemanticBridge.cpp").read_text(encoding="utf-8")
     for case in ["PartyCreate", "PartyLeave", "PartyInvite", "PartyJoin", "ReviveNormal"]:
         assert f"case Command::{case}" in text
+
+
+def test_post_login_dispatch_uses_tab_specific_workflows():
+    text = (Path(__file__).parents[1] / "src/tlmtool/app.py").read_text(encoding="utf-8")
+    start = text.index("    def _dispatch_after_login(self):")
+    end = text.index("    def apply_schedule(self):", start)
+    block = text[start:end]
+    assert '"Party": (2, "toggle_run")' in block
+    assert '"Train": (3, "_toggle_farm")' in block
+    assert '"Train LSV": (4, "_toggle_farm")' in block
+    assert '"Dồn vàng": (7, "_toggle_farm")' in block
+    assert "self.action_all(action)" not in block
