@@ -149,6 +149,12 @@ class TlmBackend:
     def revive_normal(self, gw: GameWindow) -> ActionResult:
         return self._semantic(gw, lambda: self.driver.revive_normal(gw))
 
+    def read_bag_page(self, gw: GameWindow, start: int = 0):
+        return self.driver.read_bag_page(gw, start)
+
+    def sell_bag_item(self, gw: GameWindow, instance_id: int, item_id: int) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.sell_bag_item(gw, instance_id, item_id))
+
 
 class SemanticDriver:
     """Windows semantic bridge adapter.
@@ -208,6 +214,30 @@ class SemanticDriver:
 
     def revive_normal(self, gw: GameWindow) -> ActionResult:
         return self.raw(gw, Command.REVIVE_NORMAL)
+
+    def read_bag_page(self, gw: GameWindow, start: int = 0):
+        if self._native is None:
+            return None
+        try:
+            return self._native.raw(gw, Command.READ_BAG_PAGE, max(0, int(start)), 0, 0, 3.0)
+        except Exception as exc:
+            self._load_error = str(exc)
+            return None
+
+    @staticmethod
+    def _split_i64(value: int) -> tuple[int, int]:
+        raw = int(value) & 0xFFFFFFFFFFFFFFFF
+        low = raw & 0xFFFFFFFF
+        high = (raw >> 32) & 0xFFFFFFFF
+        if low >= 0x80000000:
+            low -= 0x100000000
+        if high >= 0x80000000:
+            high -= 0x100000000
+        return low, high
+
+    def sell_bag_item(self, gw: GameWindow, instance_id: int, item_id: int) -> ActionResult:
+        low, high = self._split_i64(instance_id)
+        return self.raw(gw, Command.SELL_BAG_ITEM, low, high, int(item_id), 3.0)
 
     def reload(self, gw: GameWindow) -> ActionResult:
         # Reload is an account/login workflow in TLM, not a generic gameplay
