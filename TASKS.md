@@ -6,10 +6,10 @@ Mỗi task có acceptance riêng. Không đóng task chỉ vì source đã viế
 |---|---|---|---|
 | T00 | Baseline / evidence lock | branch, source tree, knowledge/history, feature manifest | DONE |
 | T01 | UI shell 1:1 | 11 tab visible, kích thước/caption/control/color baseline | IMPLEMENTED — WINDOWS VISUAL TEST PENDING |
-| T02 | Start / quản lý cửa sổ | discover game, ẩn/hiện, grid 1..5, xếp chéo, đóng | IMPLEMENTED — RUNTIME UNTESTED |
+| T02 | Start / quản lý cửa sổ | discover game, ẩn/hiện off-screen, xếp gọn (0,0), xếp chéo +50, grid/sync shell, đóng | PARTIAL — DWM preview + InputSync runtime pending |
 | T03 | Login | game path/launch, account rows, scheduler, exact click/type/login sequence, after-login | PARTIAL — proxy/captcha/runtime proof pending |
-| T04 | Native semantic bridge | x64 DLL, shared-memory protocol, per-PID attach, state/move/NPC/Train core; then expand command surface | CORE SOURCE IMPLEMENTED — WINDOWS BUILD/RUNTIME PENDING |
-| T05 | Party | create team, invite burst, wait TeamID proof, after-party dispatch | TODO |
+| T04 | Native semantic bridge | x64 DLL, shared-memory protocol, per-PID attach, state/move/NPC/Train + Party + Revive primitives | WINDOWS BUILD PASS — LIVE RUNTIME PENDING |
+| T05 | Party | create team, leave/invite/join, concurrent groups, wait TeamID proof, after-party dispatch | SOURCE IMPLEMENTED — RUNTIME UNTESTED |
 | T06 | Train | về thành, saved spot, filter/loot/heal/death/reconnect, sell/return/train | UI DONE / ENGINE TODO |
 | T07 | Train LSV | enter/leave LSV, train spot, buff timer, death/heal/reconnect | UI DONE / ENGINE TODO |
 | T08 | Phó Bản | team config + schedule + follow/pick/drop/buff + scenario execution | UI DONE / ENGINE TODO |
@@ -37,9 +37,9 @@ Mỗi task có acceptance riêng. Không đóng task chỉ vì source đã viế
 - T04.2 x64 `WH_GETMESSAGE` bridge attach — implemented source.
 - T04.3 read-only state snapshot — core source implemented.
 - T04.4 Start/Stop AutoFight, move, mount, NPC — core source implemented.
-- T04.5 Revive + bag/sell/treatment/loot primitives — pending port.
+- T04.5 Revive primitive implemented; bag/sell/treatment/loot primitives — pending port.
 - T04.6 InputSync/internal click + direct trade/bag UI primitives — pending port.
-- T04.7 Windows MSVC build proof — pending CI.
+- T04.7 Windows MSVC + Nuitka standalone build proof — PASS (Actions run 37111235479 and subsequent green runs).
 - T04.8 harmless per-PID live proof — pending runtime.
 
 ## Runtime acceptance rule
