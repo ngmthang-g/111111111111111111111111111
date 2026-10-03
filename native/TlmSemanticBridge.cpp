@@ -121,6 +121,12 @@ bool InvokeScalar64(const MethodInfo*m,void*self,void**args,std::int64_t&out,wch
 FieldInfo* FindField(Il2CppClass*klass,const char*name){
     for(Il2CppClass*c=klass;c;c=g_api.class_get_parent(c)){if(auto*f=g_api.class_get_field_from_name(c,name))return f;}return nullptr;
 }
+bool ObjectMember(Il2CppObject*object,const char*name,Il2CppObject*&out,wchar_t*d,size_t cap){
+    out=nullptr;if(!object||!name)return false;Il2CppClass*k=g_api.object_get_class(object);if(!k)return false;
+    std::string getter=std::string("get_")+name;if(auto*m=FindMethod(k,getter.c_str(),0,false)){wchar_t ignored[96]{};if(InvokeObj(m,object,nullptr,out,ignored,ArrayCount(ignored))&&out)return true;}
+    if(auto*f=FindField(k,name)){g_api.field_get_value(object,f,&out);if(out)return true;}
+    SetText(d,cap,L"Không đọc được member UI ");return false;
+}
 bool ReadScalarField64(Il2CppObject*object,Il2CppClass*klass,const char*name,std::int64_t&out){
     out=0;FieldInfo*f=FindField(klass,name);if(!f)return false;const Il2CppType*t=g_api.field_get_type(f);char*tn=t?g_api.type_get_name(t):nullptr;if(!tn)return false;
     bool ok=true;
@@ -260,7 +266,8 @@ bool SellBagItem(std::int64_t instanceID,std::int32_t expectedItemID,Response&re
     if(!FindFreshBagItem(c,instanceID,expectedItemID,itemObject,item,d,cap))return false;
     if(!item.sellable){SetText(d,cap,L"Item hiện tại IsItemSellable=false; chặn bán");return false;}
     if(item.itemID>=40000000&&item.itemID<50000000){SetText(d,cap,L"Item quest-family; chặn bán");return false;}
-    Il2CppObject*sellTab=nullptr;if(!FindUi(c,"NPCShop_SellItemTab",sellTab,d,cap)||!sellTab){SetText(d,cap,L"Chưa có NPCShop_SellItemTab hiện hành; không bán mù");return false;}
+    Il2CppObject*shop=nullptr;if(!FindUi(c,"NPCShop",shop,d,cap)||!shop){SetText(d,cap,L"Chưa có NPCShop hiện hành; không bán mù");return false;}
+    Il2CppObject*sellTab=nullptr;if(!ObjectMember(shop,"SellItemTab",sellTab,d,cap)||!sellTab){SetText(d,cap,L"NPCShop chưa có SellItemTab hiện hành");return false;}
     auto*corlib=g_api.get_corlib();Il2CppClass*systemObject=corlib?g_api.class_from_name(corlib,"System","Object"):nullptr;if(!systemObject){SetText(d,cap,L"Không resolve System.Object");return false;}
     Il2CppString*function=g_api.string_new("RequestSellItem");Il2CppObject*argsArray=g_api.array_new(systemObject,1);
     if(!function||!argsArray||!WriteLocal(argsArray,0x20,itemObject)){SetText(d,cap,L"Không tạo được RequestSellItem(item) args");return false;}
