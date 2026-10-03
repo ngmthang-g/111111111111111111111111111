@@ -35,6 +35,7 @@ jobs:
         run: >-
           python -m nuitka main.py
           --standalone
+          --assume-yes-for-downloads
           --enable-plugin=tk-inter
           --windows-console-mode=disable
           --output-dir=build/nuitka
