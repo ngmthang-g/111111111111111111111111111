@@ -99,7 +99,8 @@ def test_native_bag_and_sell_surface_is_implemented():
     text = (Path(__file__).parents[1] / "native/TlmSemanticBridge.cpp").read_text(encoding="utf-8")
     for case in ["ReadBagPage", "SellBagItem"]:
         assert f"case Command::{case}" in text
-    assert "NPCShop_SellItemTab" in text
+    assert 'FindUi(c,"NPCShop"' in text
+    assert '"SellItemTab"' in text
     assert "RequestSellItem" in text
     assert "Item quest-family; chặn bán" in text
 
@@ -120,3 +121,13 @@ def test_verified_sell_rechecks_live_bag_before_and_after():
     assert "Item instance đã đổi/mất; yêu cầu re-scan" in text
     assert "Đã bán và xác nhận remove instance=" in text
     assert "Đã gửi bán nhưng chưa xác nhận item biến mất" in text
+
+
+def test_tlm_headless_sell_defaults_to_equipment_and_live_instances():
+    text = (Path(__file__).parents[1] / "src/tlmtool/backend.py").read_text(encoding="utf-8")
+    assert 'item_types: tuple[str, ...] = ("Equip",)' in text
+    assert "def list_sellable" in text
+    assert "item.instance_id" in text
+    assert "item.sellable" in text
+    assert "40_000_000 <= item.item_id < 50_000_000" in text
+    assert "def sell_open_shop" in text
