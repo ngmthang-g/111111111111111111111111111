@@ -1168,8 +1168,13 @@ class TrainTab(BaseTab):
         self.app.set_status("[Train] Buff theo thời gian đang chờ port đúng runtime TLM.")
 
     def _save_config(self):
+        try:
+            loop_minutes = max(1, int(self.loop_minutes.get()))
+        except (tk.TclError, TypeError, ValueError):
+            loop_minutes = 30
+            self.loop_minutes.set(loop_minutes)
         self.store.set("Farm", "town_condition", self.town_condition.get())
-        self.store.set("Farm", "loop_minutes", max(1, int(self.loop_minutes.get() or 1)))
+        self.store.set("Farm", "loop_minutes", loop_minutes)
         self.store.set("Farm", "respawn", self.respawn.get())
         self.store.set("Farm", "auto_reconnect", self.auto_reconnect.get())
         self.store.set("Farm", "pickup_no_cankhon", self.pickup_no_cankhon.get())
@@ -1493,12 +1498,14 @@ class TrainTab(BaseTab):
             return
         self._save_config()
         self._save_account_config()
+        if not self._session_stops and not self._running:
+            self._stop_all_event.clear()
         cancel = threading.Event()
         self._session_stops[hwnd] = cancel
         config = {
             "respawn": self.respawn.get(),
             "town_condition": self.town_condition.get(),
-            "loop_minutes": max(1, int(self.loop_minutes.get() or 1)),
+            "loop_minutes": max(1, self.store.get_int("Farm", "loop_minutes", 30)),
             "heal_after_death": self.heal_after_death.get(),
             "auto_reconnect": self.auto_reconnect.get(),
         }
