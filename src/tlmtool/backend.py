@@ -122,6 +122,18 @@ class TlmBackend:
         finally:
             self.gate.leave(gw.pid)
 
+    def start_path(self, gw: GameWindow, map_id: int, x: int, y: int) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.raw(gw, Command.START_PATH, int(map_id), int(x), int(y)))
+
+    def stop_path(self, gw: GameWindow) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.raw(gw, Command.STOP_PATH))
+
+    def start_auto_fight(self, gw: GameWindow) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.raw(gw, Command.START_AUTO_FIGHT))
+
+    def stop_auto_fight(self, gw: GameWindow) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.raw(gw, Command.STOP_AUTO_FIGHT))
+
     def party_create(self, gw: GameWindow) -> ActionResult:
         return self._semantic(gw, lambda: self.driver.party_create(gw))
 
