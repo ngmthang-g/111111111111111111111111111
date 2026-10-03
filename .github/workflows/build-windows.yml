@@ -1,0 +1,47 @@
+name: build-windows
+on:
+  push:
+    branches: [main, tlm-clone-2.1.2]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+          pip install nuitka ordered-set zstandard pytest
+      - name: Python tests
+        run: |
+          $env:PYTHONPATH="src"
+          python -m compileall -q src main.py
+          pytest -q
+      - name: Configure native bridge
+        run: cmake -S native -B build/native -A x64
+      - name: Build native bridge
+        run: cmake --build build/native --config Release
+      - name: Stage native DLL
+        shell: pwsh
+        run: |
+          Copy-Item build/native/Release/TlmSemanticBridge.dll src/tlmtool/TlmSemanticBridge.dll
+      - name: Build TLMTool standalone
+        run: >-
+          python -m nuitka main.py
+          --standalone
+          --enable-plugin=tk-inter
+          --windows-console-mode=disable
+          --output-dir=build/nuitka
+          --output-filename=TLMTool.exe
+          --include-package=tlmtool
+          --include-data-file=src/tlmtool/TlmSemanticBridge.dll=tlmtool/TlmSemanticBridge.dll
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TLMTool-2.1.2-clone-windows-x64
+          path: build/nuitka/main.dist/**
