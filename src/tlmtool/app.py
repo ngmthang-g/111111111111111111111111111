@@ -11,7 +11,12 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from . import __version__
 from .backend import Action, TlmBackend
 from .game_data import map_name_to_id, map_names
-from .tlm_reference import TRAIN_HEAL_COORDS, SELL_MAP_COORDS, sell_map_id, sell_map_names
+from .tlm_reference import (
+    PIXEL_DATA, SELL_CLOSE_CLICK, SELL_CONFIRM_STEPS, SELL_ERROR_CLOSE_CLICK,
+    SELL_MAP_COORDS, SELL_MAX_SLOT_CLICKS, SELL_OPEN_CLICKS,
+    SELL_SLOT_CHECK_INTERVAL, SELL_SLOT_CHECK_TIMEOUT, SELL_SLOT_TICK_SECONDS,
+    TRAIN_HEAL_COORDS, sell_map_id, sell_map_names, sell_slot_pixel,
+)
 from .services import DailyScheduleService, MonitorService
 from .storage import SettingsStore
 from .theme import BG, GREEN, GRAY, PURPLE, WHITE, button, configure_root, labelframe
@@ -1593,8 +1598,137 @@ class TrainTab(BaseTab):
                 name=f"tlm-train-fight-{row['gw'].pid}", daemon=True,
             ).start()
 
+    def _pixel_matches(self, gw, section, key):
+        cfg = PIXEL_DATA.get(section, {}).get(key)
+        if not cfg:
+            return False
+        region = cfg.get("region", ())
+        if len(region) < 2:
+            return False
+        actual = self.backend.winapi.printwindow_pixel(gw.hwnd, int(region[0]), int(region[1]))
+        if actual is None:
+            return False
+        colors = cfg.get("colors")
+        if not colors:
+            color = cfg.get("color")
+            colors = [color] if color else []
+        tolerance = float(cfg.get("tolerance", 0.0))
+        return any(
+            self.backend.winapi.color_compare(actual, tuple(int(v) for v in color), tolerance)
+            for color in colors if color
+        )
+
+    def _wait_pixel_key(self, gw, section, key, cancel, timeout=None):
+        cfg = PIXEL_DATA.get(section, {}).get(key)
+        if not cfg:
+            return False
+        limit = float(cfg.get("timeout", 1.0) if timeout is None else timeout)
+        deadline = time.monotonic() + max(0.0, limit)
+        while time.monotonic() <= deadline:
+            if cancel.is_set() or self._stop_all_event.is_set():
+                return False
+            if self._pixel_matches(gw, section, key):
+                return True
+            if cancel.wait(0.05):
+                return False
+        return False
+
+    def _click_until_pixel(self, gw, x, y, section, key, label, cancel):
+        if self._pixel_matches(gw, section, key):
+            return True
+        for _attempt in range(3):
+            if cancel.is_set() or self._stop_all_event.is_set():
+                return False
+            if not self.backend.winapi.send_click(gw.hwnd, int(x), int(y)):
+                return False
+            if self._wait_pixel_key(gw, section, key, cancel):
+                return True
+        self.after(0, lambda: self.app.set_status(f"[Train] {label} không xuất hiện sau 3 lần thử."))
+        return False
+
+    def _finish_sell_ui(self, gw, error=False):
+        x, y = SELL_ERROR_CLOSE_CLICK if error else SELL_CLOSE_CLICK
+        self.backend.winapi.send_click(gw.hwnd, int(x), int(y))
+
+    def _sell_worker(self, row, cancel, move_first=True):
+        gw = row["gw"]
+        if move_first:
+            coord = self._row_coord(row, "sell")
+            if not coord:
+                self.after(0, lambda: self.app.set_status(f"[Train] {row['name'].get()}: chưa chọn tọa độ bán."))
+                return False
+            if not self._move_worker(row, coord, cancel):
+                return False
+
+        self.backend.stop_auto_fight(gw)
+        self._set_row_state(row, "Mở shop")
+
+        # Exact FarmTab._sell_acc click sequence recovered from TLMTool 2.1.2.
+        for x, y in SELL_OPEN_CLICKS:
+            if cancel.is_set() or self._stop_all_event.is_set():
+                return False
+            if not self.backend.winapi.send_click(gw.hwnd, int(x), int(y)):
+                return False
+            if cancel.wait(0.20):
+                return False
+
+        for x, y, section, key, label in SELL_CONFIRM_STEPS:
+            if not self._click_until_pixel(gw, x, y, section, key, label, cancel):
+                self._finish_sell_ui(gw, error=True)
+                return False
+
+        try:
+            keep_count = max(0, min(6, int(self.sell_tab.get())))
+        except (TypeError, ValueError, tk.TclError):
+            keep_count = 0
+        empty_key, click_pos = sell_slot_pixel(keep_count)
+        self._set_row_state(row, "Đang bán")
+
+        for _ in range(SELL_MAX_SLOT_CLICKS):
+            if cancel.is_set() or self._stop_all_event.is_set():
+                self._finish_sell_ui(gw, error=True)
+                return False
+            if self._pixel_matches(gw, "shop", empty_key):
+                self._finish_sell_ui(gw, error=False)
+                self._set_row_state(row, "Bán xong")
+                return True
+
+            if not self.backend.winapi.send_click(gw.hwnd, int(click_pos[0]), int(click_pos[1])):
+                self._finish_sell_ui(gw, error=True)
+                return False
+
+            # TLM uses a short empty-slot check after every fast-sell click,
+            # then preserves the recovered 1.1s click cadence.
+            check_deadline = time.monotonic() + SELL_SLOT_CHECK_TIMEOUT
+            while time.monotonic() < check_deadline:
+                if cancel.is_set() or self._stop_all_event.is_set():
+                    self._finish_sell_ui(gw, error=True)
+                    return False
+                if self._pixel_matches(gw, "shop", empty_key):
+                    self._finish_sell_ui(gw, error=False)
+                    self._set_row_state(row, "Bán xong")
+                    return True
+                if cancel.wait(SELL_SLOT_CHECK_INTERVAL):
+                    return False
+            remaining = max(0.0, SELL_SLOT_TICK_SECONDS - SELL_SLOT_CHECK_TIMEOUT)
+            if cancel.wait(remaining):
+                return False
+
+        self._finish_sell_ui(gw, error=True)
+        self.after(0, lambda: self.app.set_status("[Train] Bán đồ chạm giới hạn 100 click của TLM."))
+        return False
+
     def _sell_all_pending(self):
-        self.app.set_status("[Train] Bán đồ đang chờ port primitive bag/shop từ 12.4.2.")
+        rows = self._checked_rows()
+        if not rows:
+            self.app.set_status("[Train] Chưa chọn tài khoản.")
+            return
+        cancel = threading.Event()
+        for row in rows:
+            threading.Thread(
+                target=self._sell_worker, args=(row, cancel, True),
+                name=f"tlm-train-sell-{row['gw'].pid}", daemon=True,
+            ).start()
 
     def _toggle_single_farm(self, row):
         hwnd = row["gw"].hwnd
