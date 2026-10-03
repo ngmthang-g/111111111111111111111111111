@@ -11,7 +11,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from . import __version__
 from .backend import Action, TlmBackend
 from .game_data import map_name_to_id, map_names
-from .tlm_reference import SELL_MAP_COORDS, sell_map_id, sell_map_names
+from .tlm_reference import TRAIN_HEAL_COORDS, SELL_MAP_COORDS, sell_map_id, sell_map_names
 from .services import DailyScheduleService, MonitorService
 from .storage import SettingsStore
 from .theme import BG, GREEN, GRAY, PURPLE, WHITE, button, configure_root, labelframe
@@ -1069,19 +1069,91 @@ class TrainTab(BaseTab):
         r = tk.Frame(city, bg=BG)
         r.pack(fill="x", padx=4, pady=3)
         tk.Label(r, text="Điều kiện về thành:", bg=BG, font=("Segoe UI", 9, "bold")).pack(side="left")
-        self.town_condition = tk.StringVar(value=self.store.get("Farm", "town_condition", "period"))
-        for text, value in [("Không về", "none"), ("Khi đầy túi", "bag"), ("Theo chu kỳ (phút):", "period")]:
+        town_value = self.store.get("Farm", "town_condition", "cycle")
+        if town_value == "bag":
+            town_value = "full_bag_timer"
+        if town_value == "period":
+            town_value = "cycle"
+        self.town_condition = tk.StringVar(value=town_value)
+        for text, value in [("Không về", "never"), ("Khi đầy túi", "full_bag_timer"), ("Theo chu kỳ (phút):", "cycle")]:
             tk.Radiobutton(
                 r, text=text, value=value, variable=self.town_condition, bg=BG,
                 command=self._save_config,
             ).pack(side="left", padx=2)
         self.loop_minutes = tk.IntVar(value=max(1, self.store.get_int("Farm", "loop_minutes", 30)))
-        self.loop_spin = tk.Spinbox(r, from_=1, to=999, width=4, textvariable=self.loop_minutes, command=self._save_config)
+        self.loop_spin = tk.Spinbox(r, from_=1, to=99999, width=6, textvariable=self.loop_minutes, command=self._save_config)
         self.loop_spin.pack(side="left")
         self.loop_spin.bind("<FocusOut>", lambda _e: self._save_config())
-        button(r, "Hiện cấu hình", self._toggle_town_config, "gray").pack(side="right")
+        self.town_toggle_btn = button(r, "Hiện cấu hình", self._toggle_town_config, "gray")
+        self.town_toggle_btn.pack(side="right")
 
         self.town_extra_visible = False
+        self.town_extra = tk.Frame(city, bg=BG)
+
+        nav = tk.Frame(self.town_extra, bg=BG)
+        nav.pack(fill="x", padx=4, pady=(1, 2))
+        tk.Label(nav, text="Phương thức về thành:", bg=BG, font=("Segoe UI", 9, "bold")).pack(side="left")
+        tk.Label(nav, text="Ưu tiên lần lượt:", bg=BG).pack(side="left", padx=(5, 2))
+        nav_values = ["", "Phù 1", "Phù 2", "Phù 3", "Ngựa"]
+        nav_defaults = ["Phù 1", "Phù 2", "Phù 3", "Ngựa"]
+        self.nav_priority_vars = []
+        for i, default in enumerate(nav_defaults, start=1):
+            var = tk.StringVar(value=self.store.get("Farm", f"nav_priority_{i}", default))
+            self.nav_priority_vars.append(var)
+            cb = ttk.Combobox(nav, textvariable=var, values=nav_values, state="readonly", width=7)
+            cb.pack(side="left", padx=1)
+            cb.bind("<<ComboboxSelected>>", lambda _e: self._save_config())
+
+        tk.Label(self.town_extra, text="Khi về thành:", bg=BG, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=4)
+        sell_row = tk.Frame(self.town_extra, bg=BG)
+        sell_row.pack(fill="x", padx=4, pady=1)
+        self.sell_equip = tk.BooleanVar(value=self.store.get_bool("Farm", "sell_equip", True))
+        tk.Checkbutton(sell_row, text="Bán trang bị", variable=self.sell_equip, bg=BG, width=14, anchor="w", command=self._save_config).pack(side="left")
+        self.sell_map = tk.StringVar(value=self.store.get("Farm", "sell_map", sell_map_names()[0]))
+        self.sell_map_cb = ttk.Combobox(sell_row, textvariable=self.sell_map, values=sell_map_names(), state="readonly", width=10)
+        self.sell_map_cb.pack(side="left", padx=1)
+        self.sell_map_cb.bind("<<ComboboxSelected>>", lambda _e: self._save_config())
+        tk.Label(sell_row, text="Bớt lại:", bg=BG, width=8, anchor="w").pack(side="left", padx=(2, 0))
+        self.sell_tab = tk.StringVar(value=self.store.get("Farm", "sell_tab", "0"))
+        self.sell_tab_cb = ttk.Combobox(sell_row, textvariable=self.sell_tab, values=[str(i) for i in range(7)], state="readonly", width=3)
+        self.sell_tab_cb.pack(side="left")
+        self.sell_tab_cb.bind("<<ComboboxSelected>>", lambda _e: self._save_config())
+
+        hp_row = tk.Frame(self.town_extra, bg=BG)
+        hp_row.pack(fill="x", padx=4, pady=1)
+        self.buy_hp = tk.BooleanVar(value=self.store.get_bool("Farm", "buy_hp", False))
+        tk.Checkbutton(hp_row, text="Mua HP", variable=self.buy_hp, bg=BG, command=self._save_config).pack(side="left")
+        self.hp_item = tk.StringVar(value=self.store.get("Farm", "hp_item", "Hành huyết tán"))
+        hp_cb = ttk.Combobox(hp_row, textvariable=self.hp_item, values=["Hành huyết tán", "Hoạt huyết tán", "Kim sang dược"], state="readonly", width=18)
+        hp_cb.pack(side="left", padx=(2, 16))
+        hp_cb.bind("<<ComboboxSelected>>", lambda _e: self._save_config())
+        tk.Label(hp_row, text="Số lượng:", bg=BG, width=8, anchor="w").pack(side="left")
+        self.hp_qty = tk.StringVar(value=self.store.get("Farm", "hp_qty", "50"))
+        hp_qty_entry = tk.Entry(hp_row, textvariable=self.hp_qty, width=6, justify="center")
+        hp_qty_entry.pack(side="left")
+        hp_qty_entry.bind("<FocusOut>", lambda _e: self._save_config())
+
+        mp_row = tk.Frame(self.town_extra, bg=BG)
+        mp_row.pack(fill="x", padx=4, pady=1)
+        self.buy_mp = tk.BooleanVar(value=self.store.get_bool("Farm", "buy_mp", False))
+        tk.Checkbutton(mp_row, text="Mua MP", variable=self.buy_mp, bg=BG, command=self._save_config).pack(side="left")
+        self.mp_item = tk.StringVar(value=self.store.get("Farm", "mp_item", "Hành khí tán"))
+        mp_cb = ttk.Combobox(mp_row, textvariable=self.mp_item, values=["Hành khí tán", "Hoài linh đan", "Qui linh hoàn"], state="readonly", width=18)
+        mp_cb.pack(side="left", padx=(2, 16))
+        mp_cb.bind("<<ComboboxSelected>>", lambda _e: self._save_config())
+        tk.Label(mp_row, text="Số lượng:", bg=BG, width=8, anchor="w").pack(side="left")
+        self.mp_qty = tk.StringVar(value=self.store.get("Farm", "mp_qty", "50"))
+        mp_qty_entry = tk.Entry(mp_row, textvariable=self.mp_qty, width=6, justify="center")
+        mp_qty_entry.pack(side="left")
+        mp_qty_entry.bind("<FocusOut>", lambda _e: self._save_config())
+
+        meds_row = tk.Frame(self.town_extra, bg=BG)
+        meds_row.pack(fill="x", padx=4, pady=(1, 3))
+        tk.Label(meds_row, text="Tọa độ Dược:", bg=BG).pack(side="left")
+        self.meds_map = tk.StringVar(value=self.store.get("Farm", "meds_map", sell_map_names()[0]))
+        self.meds_cb = ttk.Combobox(meds_row, textvariable=self.meds_map, values=sell_map_names(), state="readonly", width=18)
+        self.meds_cb.pack(side="left", padx=(35, 0))
+        self.meds_cb.bind("<<ComboboxSelected>>", lambda _e: self._save_config())
 
         cfg = labelframe(self, "Cấu hình Train")
         cfg.pack(fill="x", padx=5, pady=2)
@@ -1089,11 +1161,13 @@ class TrainTab(BaseTab):
         self.respawn = tk.BooleanVar(value=self.store.get_bool("Farm", "respawn", False))
         self.auto_reconnect = tk.BooleanVar(value=self.store.get_bool("Farm", "auto_reconnect", False))
         self.pickup_no_cankhon = tk.BooleanVar(value=self.store.get_bool("Farm", "pickup_no_cankhon", False))
-        self.heal_after_death = tk.BooleanVar(value=self.store.get_bool("Farm", "heal_after_death", False))
+        self.heal_after_death = tk.BooleanVar(
+            value=self.store.get_bool("Farm", "trist", self.store.get_bool("Farm", "heal_after_death", False))
+        )
         for text, var in [
             ("Quay lại train khi chết", self.respawn),
             ("Tự kết nối lại khi mất mạng", self.auto_reconnect),
-            ("Nhặt đồ không dùng hồ lô (cần khôn hồ)", self.pickup_no_cankhon),
+            ("Nhặt đồ không dùng hồ lô (càn khôn hồ)", self.pickup_no_cankhon),
             ("Trị liệu sau khi chết", self.heal_after_death),
         ]:
             tk.Checkbutton(cfg, text=text, variable=var, bg=BG, command=self._save_config).pack(anchor="w", padx=5)
@@ -1104,7 +1178,7 @@ class TrainTab(BaseTab):
         self.heal_map = tk.StringVar(value=self.store.get("Farm", "heal_map", "Trị liệu Tô Châu"))
         ttk.Combobox(
             heal, textvariable=self.heal_map,
-            values=["Trị liệu Tô Châu", "Trị liệu Đại Lý", "Trị liệu Lạc Dương"],
+            values=["======Có sẵn======", *TRAIN_HEAL_COORDS.keys(), "=====Thủ công====="],
             state="readonly", width=20,
         ).pack(side="left")
 
@@ -1118,7 +1192,7 @@ class TrainTab(BaseTab):
                 command=self._save_config,
             ).pack(side="left")
 
-        tk.Label(cfg, text="Dùng thú cưỡi gần được (2x, 4x...):", bg=BG, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=5)
+        tk.Label(cfg, text="Dùng thủ công đan dược (2x, 4x...):", bg=BG, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=5)
         button(cfg, "+ Thêm", self._add_buff_placeholder, "green").pack(anchor="w", padx=5, pady=3)
 
         coord = labelframe(self, "Cấu hình tọa độ lưu sẵn")
@@ -1160,10 +1234,13 @@ class TrainTab(BaseTab):
         self.after(100, self._refresh_accounts)
 
     def _toggle_town_config(self):
-        # The original TLM opens the advanced town/sell/medicine controls here.
-        # Keep the baseline button wired but fail closed until that exact panel
-        # is ported instead of inventing substitute controls.
-        self.app.set_status("[Train] Cấu hình về thành nâng cao đang chờ port 1:1.")
+        self.town_extra_visible = not self.town_extra_visible
+        if self.town_extra_visible:
+            self.town_extra.pack(fill="x", padx=4, pady=(0, 2))
+            self.town_toggle_btn.config(text="Ẩn cấu hình")
+        else:
+            self.town_extra.pack_forget()
+            self.town_toggle_btn.config(text="Hiện cấu hình")
 
     def _add_buff_placeholder(self):
         self.app.set_status("[Train] Buff theo thời gian đang chờ port đúng runtime TLM.")
@@ -1176,10 +1253,22 @@ class TrainTab(BaseTab):
             self.loop_minutes.set(loop_minutes)
         self.store.set("Farm", "town_condition", self.town_condition.get())
         self.store.set("Farm", "loop_minutes", loop_minutes)
+        for i, var in enumerate(self.nav_priority_vars, start=1):
+            self.store.set("Farm", f"nav_priority_{i}", var.get())
+        self.store.set("Farm", "sell_equip", self.sell_equip.get())
+        self.store.set("Farm", "sell_map", self.sell_map.get())
+        self.store.set("Farm", "sell_tab", self.sell_tab.get())
+        self.store.set("Farm", "meds_map", self.meds_map.get())
+        self.store.set("Farm", "buy_hp", self.buy_hp.get())
+        self.store.set("Farm", "hp_item", self.hp_item.get())
+        self.store.set("Farm", "hp_qty", self.hp_qty.get())
+        self.store.set("Farm", "buy_mp", self.buy_mp.get())
+        self.store.set("Farm", "mp_item", self.mp_item.get())
+        self.store.set("Farm", "mp_qty", self.mp_qty.get())
         self.store.set("Farm", "respawn", self.respawn.get())
         self.store.set("Farm", "auto_reconnect", self.auto_reconnect.get())
         self.store.set("Farm", "pickup_no_cankhon", self.pickup_no_cankhon.get())
-        self.store.set("Farm", "heal_after_death", self.heal_after_death.get())
+        self.store.set("Farm", "trist", self.heal_after_death.get())
         self.store.set("Farm", "pickup_mode", self.pickup_mode.get())
         self.store.set("Farm", "heal_map", self.heal_map.get())
         self.store.save()
@@ -1578,12 +1667,12 @@ class TrainTab(BaseTab):
                     started = time.monotonic()
                     continue
 
-                if config["town_condition"] == "bag" and snap.free_bag_space == 0:
+                if config["town_condition"] in {"bag", "full_bag_timer"} and snap.free_bag_space == 0:
                     self.backend.stop_auto_fight(gw)
                     self._set_row_state(row, "Túi đầy • chờ Bán")
                     self.after(0, lambda: self.app.set_status("[Train] Túi đầy: sell workflow chưa được port, đã dừng an toàn."))
                     return
-                if config["town_condition"] == "period" and time.monotonic() - started >= config["loop_minutes"] * 60:
+                if config["town_condition"] in {"period", "cycle"} and time.monotonic() - started >= config["loop_minutes"] * 60:
                     self.backend.stop_auto_fight(gw)
                     self._set_row_state(row, "Đến chu kỳ • chờ Bán")
                     self.after(0, lambda: self.app.set_status("[Train] Đến chu kỳ về thành: sell/town workflow chưa được port, đã dừng an toàn."))
