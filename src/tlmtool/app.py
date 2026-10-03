@@ -6,14 +6,14 @@ import threading
 import time
 import tkinter as tk
 from collections import deque
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from . import __version__
 from .backend import Action, TlmBackend
 from .services import DailyScheduleService, MonitorService
 from .storage import SettingsStore
 from .theme import BG, GREEN, GRAY, PURPLE, WHITE, button, configure_root, labelframe
-from .widgets import account_table_header, start_bar
+from .widgets import account_table_header, add_vertical_scroll, start_bar
 
 log = logging.getLogger("tlmtool")
 
@@ -86,96 +86,393 @@ class StartTab(BaseTab):
 
 
 class LoginTab(BaseTab):
-    ROWS=18
+    # TLM 2.1.2 keeps a fixed 100-row account model; the screenshot only shows
+    # the rows that fit in the scroll viewport.
+    ROWS = 100
+
     def __init__(self, master, app) -> None:
         super().__init__(master, app)
-        self.schedule=DailyScheduleService()
-        game=labelframe(self,"Cấu hình game"); game.pack(fill="x",padx=5,pady=(5,2))
-        top=tk.Frame(game,bg=BG); top.pack(fill="x",padx=4,pady=3)
-        button(top,"Chọn thư mục game",self.choose_game,"blue").pack(side="left",padx=1)
-        button(top,"Mở game",self.open_game,"blue").pack(side="left",padx=4)
-        self.game_dir=self.store.get("game","directory","")
-        self.game_status=tk.Label(game,text=self._game_status(),bg=BG,fg=GREEN,font=("Segoe UI",9,"bold"),anchor="w")
-        self.game_status.pack(fill="x",padx=5,pady=(0,4))
+        self.schedule = DailyScheduleService()
+        self._batch_cancel = threading.Event()
+        self._batch_running = False
+        self._online: dict[int, int] = {}
 
-        sched=labelframe(self,"Cấu hình lịch trình"); sched.pack(fill="x",padx=5,pady=2)
-        self.schedule_enabled=tk.BooleanVar(value=self.store.get_bool("schedule","enabled",False))
-        tk.Checkbutton(sched,text="Chạy theo lịch (mở/tắt game)",variable=self.schedule_enabled,bg=BG,command=self.apply_schedule).grid(row=0,column=0,columnspan=5,sticky="w",padx=4)
-        self.close_h=tk.StringVar(value=self.store.get("schedule","close_h","04")); self.close_m=tk.StringVar(value=self.store.get("schedule","close_m","00"))
-        self.open_h=tk.StringVar(value=self.store.get("schedule","open_h","04")); self.open_m=tk.StringVar(value=self.store.get("schedule","open_m","20"))
-        self._time_row(sched,1,"Hẹn giờ tắt game:",self.close_h,self.close_m)
-        self.shutdown=tk.BooleanVar(value=False); tk.Checkbutton(sched,text="Tắt máy sau khi tắt game",variable=self.shutdown,bg=BG).grid(row=1,column=4,sticky="w",padx=8)
-        self._time_row(sched,2,"Hẹn giờ mở game:",self.open_h,self.open_m)
-        aft=tk.Frame(sched,bg=BG); aft.grid(row=3,column=0,columnspan=5,sticky="w",padx=4,pady=2)
-        tk.Label(aft,text="Sau khi login:",bg=BG,font=("Segoe UI",9,"bold")).pack(side="left")
-        self.after_login=tk.StringVar(value=self.store.get("schedule","after_login","Chờ"))
-        for x in ["Chờ","Party","Train","Train LSV","Dồn vàng"]:
-            tk.Radiobutton(aft,text=x,value=x,variable=self.after_login,bg=BG).pack(side="left",padx=3)
+        game = labelframe(self, "Cấu hình game")
+        game.pack(fill="x", padx=5, pady=(5, 2))
+        top = tk.Frame(game, bg=BG)
+        top.pack(fill="x", padx=4, pady=3)
+        button(top, "Chọn thư mục game", self.choose_game, "blue").pack(side="left", padx=1)
+        button(top, "Mở game", self.open_game, "blue").pack(side="left", padx=4)
+        self.game_dir = self.store.get("game", "directory", "")
+        self.game_status = tk.Label(
+            game, text=self._game_status(), bg=BG, fg=GREEN,
+            font=("Segoe UI", 9, "bold"), anchor="w",
+        )
+        self.game_status.pack(fill="x", padx=5, pady=(0, 4))
 
-        box=labelframe(self,"Cấu hình tài khoản"); box.pack(fill="both",expand=True,padx=5,pady=2)
-        flag=tk.Frame(box,bg=BG); flag.pack(fill="x")
-        tk.Label(flag,text="Chọn tài khoản muốn login",bg=BG).pack(side="left",padx=4)
-        self.show_password=tk.BooleanVar(value=False)
-        tk.Checkbutton(flag,text="Hiện mật khẩu",variable=self.show_password,bg=BG,command=self.toggle_password).pack(side="left",padx=8)
-        table=tk.Frame(box,bg=BG); table.pack(fill="both",expand=True,padx=3)
-        account_table_header(table,[("",2),("Tài khoản",14),("Mật khẩu",12),("Ẩn captcha",9),("Login",5),("Proxy",5)])
-        saved=self.store.get_json("accounts","rows",[])
-        self.account_rows=[]
+        sched = labelframe(self, "Cấu hình lịch trình")
+        sched.pack(fill="x", padx=5, pady=2)
+        self.schedule_enabled = tk.BooleanVar(value=self.store.get_bool("schedule", "enabled", False))
+        tk.Checkbutton(
+            sched, text="Chạy theo lịch (mở/tắt game)",
+            variable=self.schedule_enabled, bg=BG, command=self.apply_schedule,
+        ).grid(row=0, column=0, columnspan=5, sticky="w", padx=4)
+
+        self.close_h = tk.StringVar(value=self.store.get("schedule", "close_h", "04"))
+        self.close_m = tk.StringVar(value=self.store.get("schedule", "close_m", "00"))
+        self.open_h = tk.StringVar(value=self.store.get("schedule", "open_h", "04"))
+        self.open_m = tk.StringVar(value=self.store.get("schedule", "open_m", "20"))
+        self._time_row(sched, 1, "Hẹn giờ tắt game:", self.close_h, self.close_m)
+        self.shutdown = tk.BooleanVar(value=self.store.get_bool("schedule", "shutdown", False))
+        tk.Checkbutton(
+            sched, text="Tắt máy sau khi tắt game",
+            variable=self.shutdown, bg=BG, command=self.apply_schedule,
+        ).grid(row=1, column=4, sticky="w", padx=8)
+        self._time_row(sched, 2, "Hẹn giờ mở game:", self.open_h, self.open_m)
+
+        aft = tk.Frame(sched, bg=BG)
+        aft.grid(row=3, column=0, columnspan=5, sticky="w", padx=4, pady=2)
+        tk.Label(aft, text="Sau khi login:", bg=BG, font=("Segoe UI", 9, "bold")).pack(side="left")
+        self.after_login = tk.StringVar(value=self.store.get("schedule", "after_login", "Chờ"))
+        for x in ["Chờ", "Party", "Train", "Train LSV", "Dồn vàng"]:
+            tk.Radiobutton(
+                aft, text=x, value=x, variable=self.after_login, bg=BG,
+                command=self.apply_schedule,
+            ).pack(side="left", padx=3)
+
+        box = labelframe(self, "Cấu hình tài khoản")
+        box.pack(fill="both", expand=True, padx=5, pady=2)
+        flag = tk.Frame(box, bg=BG)
+        flag.pack(fill="x")
+        tk.Label(flag, text="Chọn tài khoản muốn login", bg=BG).pack(side="left", padx=4)
+        self.show_password = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            flag, text="Hiện mật khẩu", variable=self.show_password,
+            bg=BG, command=self.toggle_password,
+        ).pack(side="left", padx=8)
+
+        table_outer = tk.Frame(box, bg=BG)
+        table_outer.pack(fill="both", expand=True, padx=3)
+        self.accounts_canvas, table = add_vertical_scroll(table_outer)
+        self.accounts_table = table
+
+        self.select_all_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            table, variable=self.select_all_var, bg=BG,
+            command=self.toggle_all_accounts,
+        ).grid(row=0, column=0)
+        account_table_header(
+            table,
+            [("", 2), ("Tài khoản", 14), ("Mật khẩu", 12), ("Ẩn captcha", 9), ("Login", 5), ("Proxy", 5)],
+        )
+
+        saved = self.store.get_json("accounts", "rows", [])
+        self.account_rows: list[dict[str, object]] = []
         for i in range(self.ROWS):
-            rec=saved[i] if i<len(saved) else {}
-            enabled=tk.BooleanVar(value=bool(rec.get("enabled",False))); user=tk.StringVar(value=str(rec.get("username","")))
-            pwd=tk.StringVar(value=str(rec.get("password",""))); cap=tk.StringVar(value=str(rec.get("captcha","Không"))); proxy=tk.StringVar(value=str(rec.get("proxy","")))
-            tk.Checkbutton(table,variable=enabled,bg=BG).grid(row=i+1,column=0)
-            tk.Entry(table,textvariable=user,width=14).grid(row=i+1,column=1,sticky="ew",padx=1,pady=2)
-            e2=tk.Entry(table,textvariable=pwd,width=12,show="*"); e2.grid(row=i+1,column=2,sticky="ew",padx=1,pady=2)
-            ttk.Combobox(table,textvariable=cap,values=["Không","Tool"],state="readonly",width=8).grid(row=i+1,column=3,padx=1)
-            button(table,"▶",lambda ii=i:self.login_one(ii),"green",width=2).grid(row=i+1,column=4,padx=1)
-            button(table,"⇄",lambda ii=i:self.proxy_one(ii),"blue",width=2).grid(row=i+1,column=5,padx=1)
-            self.account_rows.append((enabled,user,pwd,cap,proxy,e2))
-        start_bar(self,self.start_login); self.apply_schedule()
+            rec = saved[i] if i < len(saved) and isinstance(saved[i], dict) else {}
+            enabled = tk.BooleanVar(value=bool(rec.get("enabled", False)))
+            user = tk.StringVar(value=str(rec.get("username", "")))
+            pwd = tk.StringVar(value=str(rec.get("password", "")))
+            cap = tk.StringVar(value=str(rec.get("captcha", "Không")))
+            if cap.get() not in {"Không", "Tool", "Proxy"}:
+                cap.set("Không")
+            proxy = tk.StringVar(value=str(rec.get("proxy", "")))
 
-    def _time_row(self,p,row,label,hv,mv):
-        tk.Label(p,text=label,bg=BG).grid(row=row,column=0,sticky="w",padx=4,pady=2)
-        ttk.Combobox(p,textvariable=hv,values=[f"{i:02d}" for i in range(24)],width=4,state="readonly").grid(row=row,column=1)
-        tk.Label(p,text=":",bg=BG).grid(row=row,column=2)
-        ttk.Combobox(p,textvariable=mv,values=[f"{i:02d}" for i in range(60)],width=4,state="readonly").grid(row=row,column=3)
-    def _game_status(self): return f"✓ Đã chọn game thành công: {self.game_dir}" if self.game_dir else "Chưa chọn thư mục game"
+            tk.Checkbutton(table, variable=enabled, bg=BG).grid(row=i + 1, column=0)
+            tk.Entry(table, textvariable=user, width=14).grid(row=i + 1, column=1, sticky="ew", padx=1, pady=2)
+            pass_entry = tk.Entry(table, textvariable=pwd, width=12, show="*")
+            pass_entry.grid(row=i + 1, column=2, sticky="ew", padx=1, pady=2)
+            combo = ttk.Combobox(
+                table, textvariable=cap, values=["Không", "Tool", "Proxy"],
+                state="readonly", width=8,
+            )
+            combo.grid(row=i + 1, column=3, padx=1)
+            login_btn = button(table, "▶", lambda ii=i: self.login_one(ii), "green", width=2)
+            login_btn.grid(row=i + 1, column=4, padx=1)
+            proxy_btn = button(table, "⇄", lambda ii=i: self.proxy_one(ii), "blue", width=2)
+            proxy_btn.grid(row=i + 1, column=5, padx=1)
+            row = {
+                "enabled": enabled, "username": user, "password": pwd,
+                "captcha": cap, "proxy": proxy, "password_entry": pass_entry,
+                "captcha_combo": combo, "login_btn": login_btn, "proxy_btn": proxy_btn,
+            }
+            self.account_rows.append(row)
+            combo.bind("<<ComboboxSelected>>", lambda _e, ii=i: self.on_captcha_mode_change(ii))
+            self.on_captcha_mode_change(i, popup=False)
+
+        self.start_button = start_bar(self, self.start_login)
+        self.apply_schedule()
+
+    def _time_row(self, parent, row, label, hv, mv):
+        tk.Label(parent, text=label, bg=BG).grid(row=row, column=0, sticky="w", padx=4, pady=2)
+        h = ttk.Combobox(parent, textvariable=hv, values=[f"{i:02d}" for i in range(24)], width=4, state="readonly")
+        h.grid(row=row, column=1)
+        tk.Label(parent, text=":", bg=BG).grid(row=row, column=2)
+        m = ttk.Combobox(parent, textvariable=mv, values=[f"{i:02d}" for i in range(60)], width=4, state="readonly")
+        m.grid(row=row, column=3)
+        h.bind("<<ComboboxSelected>>", lambda _e: self.apply_schedule())
+        m.bind("<<ComboboxSelected>>", lambda _e: self.apply_schedule())
+
+    def _game_status(self):
+        if self.game_dir:
+            return f"✓ Đã chọn game thành công: {self.game_dir}"
+        return "Đường dẫn game: (Chưa chọn)"
+
     def choose_game(self):
-        d=filedialog.askdirectory(title="Chọn thư mục game")
-        if d: self.game_dir=d; self.store.set("game","directory",d); self.store.save(); self.game_status.config(text=self._game_status())
+        d = filedialog.askdirectory(title="Chọn thư mục game")
+        if d:
+            self.game_dir = d
+            self.store.set("game", "directory", d)
+            self.store.save()
+            self.game_status.config(text=self._game_status())
+
     def open_game(self):
-        if not self.game_dir or not self.backend.winapi.launch_game(self.game_dir): messagebox.showwarning("TLMTool","Không tìm thấy file Thần Long  Mobile.exe")
+        if not self.game_dir or not self.backend.winapi.launch_game(self.game_dir):
+            messagebox.showwarning("TLMTool", "Không tìm thấy file Thần Long  Mobile.exe")
+
     def toggle_password(self):
-        for row in self.account_rows: row[-1].config(show="" if self.show_password.get() else "*")
+        for row in self.account_rows:
+            row["password_entry"].config(show="" if self.show_password.get() else "*")
+
+    def toggle_all_accounts(self):
+        value = self.select_all_var.get()
+        for row in self.account_rows:
+            row["enabled"].set(value)
+
+    def on_captcha_mode_change(self, index: int, popup: bool = True):
+        row = self.account_rows[index]
+        mode = row["captcha"].get()
+        btn = row["proxy_btn"]
+        if mode == "Không":
+            btn.config(text="⇄", state="disabled", bg="#e0e0e0")
+        elif mode == "Tool":
+            btn.config(text="⇄", state="normal", bg="#3465d9")
+        else:
+            btn.config(text="➜", state="normal", bg="#3465d9")
+            if popup:
+                self.edit_row_proxy(index)
+        self._schedule_save_accounts()
+
+    def edit_row_proxy(self, index: int):
+        row = self.account_rows[index]
+        value = simpledialog.askstring(
+            "Proxy riêng",
+            "Nhập proxy riêng (protocol://user:pass@ip:port hoặc user:pass:ip:port)",
+            initialvalue=row["proxy"].get(),
+            parent=self,
+        )
+        if value is not None:
+            row["proxy"].set(value.strip())
+            self.save_accounts()
+
+    def proxy_one(self, index):
+        row = self.account_rows[index]
+        mode = row["captcha"].get()
+        if mode == "Không":
+            self.app.set_status(f"Dòng {index + 1}: ẩn captcha = Không (direct).")
+            return
+        if mode == "Proxy":
+            self.edit_row_proxy(index)
+            return
+        # Tool mode is intentionally fail-closed until the bundled forwarder
+        # protocol is ported.  Do not pretend a proxy rotation succeeded.
+        self.app.set_status(f"Dòng {index + 1}: forwarder Tool chưa được kết nối.")
+
+    def _schedule_save_accounts(self):
+        try:
+            self.after_cancel(getattr(self, "_save_after_id", ""))
+        except Exception:
+            pass
+        self._save_after_id = self.after(250, self.save_accounts)
+
     def save_accounts(self):
-        self.store.set("accounts","rows",[{"enabled":a.get(),"username":u.get(),"password":p.get(),"captcha":c.get(),"proxy":x.get()} for a,u,p,c,x,_ in self.account_rows]); self.store.save()
-    def start_login(self):
-        self.save_accounts()
-        for i,row in enumerate(self.account_rows):
-            if row[0].get(): self.login_one(i)
-    def login_one(self,index):
-        windows=self.backend.windows()
-        if index>=len(windows): self.app.set_status("Không tìm thấy cửa sổ game tương ứng với tài khoản."); return
-        _,user,pwd,cap,proxy,_=self.account_rows[index]; username=user.get(); password=pwd.get()
-        if not username or not password: self.app.set_status("Thiếu tài khoản hoặc mật khẩu."); return
-        gw=windows[index]
-        def worker():
-            try:
-                self.backend.winapi.scaled_click(gw.hwnd,613,302); time.sleep(.15); self.backend.winapi.select_all(gw.hwnd); time.sleep(.05); self.backend.winapi.type_text(gw.hwnd,username)
-                time.sleep(.15); self.backend.winapi.scaled_click(gw.hwnd,573,362); time.sleep(.15); self.backend.winapi.select_all(gw.hwnd); time.sleep(.05); self.backend.winapi.type_text(gw.hwnd,password)
-                time.sleep(.15); self.backend.winapi.scaled_click(gw.hwnd,684,506); self.app.root.after(0,lambda:self.app.set_status(f"Đã gửi login: {username}"))
-            except Exception as exc: self.app.root.after(0,lambda:self.app.set_status(f"Login lỗi: {exc}"))
-        threading.Thread(target=worker,name=f"tlm-login-{gw.pid}",daemon=True).start()
-    def proxy_one(self,index): self.app.set_status(f"Proxy tài khoản {index+1}: chưa có runtime proof.")
-    def apply_schedule(self):
-        for k,v in [("enabled",self.schedule_enabled.get()),("close_h",self.close_h.get()),("close_m",self.close_m.get()),("open_h",self.open_h.get()),("open_m",self.open_m.get()),("after_login",self.after_login.get())]: self.store.set("schedule",k,v)
+        rows = []
+        for row in self.account_rows:
+            rows.append({
+                "enabled": row["enabled"].get(),
+                "username": row["username"].get(),
+                "password": row["password"].get(),
+                "captcha": row["captcha"].get(),
+                "proxy": row["proxy"].get(),
+            })
+        self.store.set("accounts", "rows", rows)
         self.store.save()
-        if self.schedule_enabled.get(): self.schedule.start((int(self.close_h.get()),int(self.close_m.get())),(int(self.open_h.get()),int(self.open_m.get())),self.scheduled_close,self.scheduled_open)
-        else: self.schedule.stop()
+
+    def _selected_indices(self):
+        return [
+            i for i, row in enumerate(self.account_rows)
+            if row["enabled"].get() and row["username"].get().strip() and row["password"].get()
+        ]
+
+    def start_login(self):
+        if self._batch_running:
+            self._batch_cancel.set()
+            self.app.set_status("Đang dừng batch login...")
+            return
+        self.save_accounts()
+        selected = self._selected_indices()
+        if not selected:
+            self.app.set_status("Chưa chọn tài khoản để login.")
+            return
+        self._batch_cancel.clear()
+        self._batch_running = True
+        self.start_button.config(text="Dừng", bg="#d12228")
+        threading.Thread(
+            target=self._batch_worker, args=(selected,),
+            name="tlm-login-batch", daemon=True,
+        ).start()
+
+    def _batch_worker(self, selected: list[int]):
+        successes = 0
+        try:
+            windows = self._ensure_windows(len(selected))
+            for pos, index in enumerate(selected):
+                if self._batch_cancel.is_set():
+                    break
+                if pos >= len(windows):
+                    break
+                if self._login_row_to_window(index, windows[pos]):
+                    successes += 1
+            if not self._batch_cancel.is_set() and successes == len(selected):
+                self.after(0, self._dispatch_after_login)
+        finally:
+            self.after(0, self._finish_batch)
+
+    def _finish_batch(self):
+        self._batch_running = False
+        self.start_button.config(text="Bắt đầu", bg=GREEN)
+
+    def _ensure_windows(self, count: int):
+        windows = self.backend.windows()
+        if len(windows) >= count:
+            return windows[:count]
+        if not self.game_dir:
+            self.after(0, lambda: self.app.set_status("Chưa chọn thư mục game."))
+            return windows
+        deadline = time.monotonic() + 30.0
+        while len(windows) < count and not self._batch_cancel.is_set():
+            if not self.backend.winapi.launch_game(self.game_dir):
+                break
+            known = {w.hwnd for w in windows}
+            wait_until = min(deadline, time.monotonic() + 8.0)
+            while time.monotonic() < wait_until and not self._batch_cancel.is_set():
+                time.sleep(0.2)
+                current = self.backend.windows()
+                if any(w.hwnd not in known for w in current):
+                    windows = current
+                    break
+            if time.monotonic() >= deadline:
+                break
+        return self.backend.windows()[:count]
+
+    def login_one(self, index):
+        row = self.account_rows[index]
+        username, password = row["username"].get().strip(), row["password"].get()
+        if not username or not password:
+            self.app.set_status("Thiếu tài khoản hoặc mật khẩu.")
+            return
+        windows = self.backend.windows()
+        if index < len(windows):
+            gw = windows[index]
+            threading.Thread(
+                target=lambda: self._login_row_to_window(index, gw),
+                name=f"tlm-login-{gw.pid}", daemon=True,
+            ).start()
+            return
+
+        def launch_and_login():
+            current = self._ensure_windows(index + 1)
+            if index >= len(current):
+                self.after(0, lambda: self.app.set_status("Không mở được cửa sổ game tương ứng."))
+                return
+            self._login_row_to_window(index, current[index])
+
+        threading.Thread(target=launch_and_login, name=f"tlm-login-launch-{index}", daemon=True).start()
+
+    def _login_row_to_window(self, index: int, gw) -> bool:
+        row = self.account_rows[index]
+        username = row["username"].get().strip()
+        password = row["password"].get()
+        try:
+            # Exact coordinate baseline recovered from TLM 2.1.2.
+            if self._batch_cancel.is_set():
+                return False
+            self.backend.winapi.scaled_click(gw.hwnd, 613, 302)
+            time.sleep(.15)
+            self.backend.winapi.select_all(gw.hwnd)
+            time.sleep(.05)
+            self.backend.winapi.type_text(gw.hwnd, username)
+            time.sleep(.15)
+            self.backend.winapi.scaled_click(gw.hwnd, 573, 362)
+            time.sleep(.15)
+            self.backend.winapi.select_all(gw.hwnd)
+            time.sleep(.05)
+            self.backend.winapi.type_text(gw.hwnd, password)
+            time.sleep(.15)
+            self.backend.winapi.scaled_click(gw.hwnd, 684, 506)
+            self.after(0, lambda: self.app.set_status(f"Đã gửi login: {username}"))
+
+            # TLM waits for actual in-game state.  A request sent is not
+            # considered success; prove the role exists through the semantic bridge.
+            deadline = time.monotonic() + 100.0
+            while time.monotonic() < deadline and not self._batch_cancel.is_set():
+                if not self.backend.winapi.is_window(gw.hwnd):
+                    return False
+                snap = self.backend.driver.read_snapshot(gw)
+                if snap and snap.role_id > 0 and snap.map_ready:
+                    self._online[index] = gw.hwnd
+                    self.after(0, lambda: row["login_btn"].config(text="Ⅱ", bg="#d12228"))
+                    self.after(0, lambda: self.app.set_status(f"✓ Hoàn tất login: {username}"))
+                    return True
+                time.sleep(.5)
+            self.after(0, lambda: self.app.set_status(f"Timeout chờ vào game: {username}"))
+            return False
+        except Exception as exc:
+            self.after(0, lambda: self.app.set_status(f"Login lỗi: {exc}"))
+            return False
+
+    def _dispatch_after_login(self):
+        mode = self.after_login.get()
+        if mode == "Chờ":
+            return
+        mapping = {
+            "Party": Action.PARTY,
+            "Train": Action.TRAIN,
+            "Train LSV": Action.TRAIN_LSV,
+            "Dồn vàng": Action.DON_VANG,
+        }
+        action = mapping.get(mode)
+        if action is not None:
+            self.action_all(action)
+
+    def apply_schedule(self):
+        for k, v in [
+            ("enabled", self.schedule_enabled.get()),
+            ("close_h", self.close_h.get()), ("close_m", self.close_m.get()),
+            ("open_h", self.open_h.get()), ("open_m", self.open_m.get()),
+            ("after_login", self.after_login.get()), ("shutdown", self.shutdown.get()),
+        ]:
+            self.store.set("schedule", k, v)
+        self.store.save()
+        if self.schedule_enabled.get():
+            self.schedule.start(
+                (int(self.close_h.get()), int(self.close_m.get())),
+                (int(self.open_h.get()), int(self.open_m.get())),
+                lambda: self.after(0, self.scheduled_close),
+                lambda: self.after(0, self.scheduled_open),
+            )
+        else:
+            self.schedule.stop()
+
     def scheduled_close(self):
-        for g in self.backend.windows(): self.backend.winapi.close(g.hwnd)
-        if self.shutdown.get() and os.name=="nt": os.system("shutdown /s /t 5")
-    def scheduled_open(self): self.open_game(); time.sleep(3); self.start_login()
+        for g in self.backend.windows():
+            self.backend.winapi.close(g.hwnd)
+        if self.shutdown.get() and os.name == "nt":
+            os.system("shutdown /s /t 5")
+
+    def scheduled_open(self):
+        self.open_game()
+        self.after(3000, self.start_login)
 
 
 def checks(parent, texts):
