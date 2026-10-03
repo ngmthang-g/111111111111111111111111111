@@ -11,6 +11,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from . import __version__
 from .backend import Action, TlmBackend
 from .game_data import map_name_to_id, map_names
+from .tlm_reference import SELL_MAP_COORDS, sell_map_id, sell_map_names
 from .services import DailyScheduleService, MonitorService
 from .storage import SettingsStore
 from .theme import BG, GREEN, GRAY, PURPLE, WHITE, button, configure_root, labelframe
@@ -1246,7 +1247,8 @@ class TrainTab(BaseTab):
         y_entry = tk.Entry(frame, textvariable=y_var, width=4)
         y_entry.pack(side="left", padx=1)
         row = {"frame": frame, "name": name, "map": map_var, "x": x_var, "y": y_var}
-        button(frame, "Train", lambda r=row: self._apply_coord_to_all(r), "green", width=8).pack(side="left", padx=1)
+        button(frame, "Bán", lambda r=row: self._apply_coord_to_all(r, "sell"), "blue", width=4).pack(side="left", padx=1)
+        button(frame, "Train", lambda r=row: self._apply_coord_to_all(r, "farm"), "green", width=5).pack(side="left", padx=1)
         button(frame, "✕", lambda r=row: self._remove_coord_row(r), "red", width=2).pack(side="left", padx=1)
         self.coord_rows.append(row)
         for widget in (name_entry, x_entry, y_entry):
@@ -1272,23 +1274,32 @@ class TrainTab(BaseTab):
             self.coord_content.pack(fill="x", padx=4, pady=(2, 0), before=self.coord_toggle_btn.master)
             self.coord_toggle_btn.config(text="Ẩn danh sách tọa độ")
 
-    def _apply_coord_to_all(self, coord_row):
+    def _apply_coord_to_all(self, coord_row, target):
         name = coord_row["name"].get().strip()
-        if not name:
+        if not name or target not in {"sell", "farm"}:
             return
         for row in self.account_rows.values():
-            row["farm"].set(name)
+            row[target].set(name)
         self._save_account_config()
 
+    def _sell_choice_values(self):
+        return [
+            "======Có sẵn======",
+            *sell_map_names(),
+            "=====Thủ công=====",
+            *self._coord_names(),
+        ]
+
     def _refresh_coord_choices(self):
-        values = self._coord_names()
+        farm_values = self._coord_names()
+        sell_values = self._sell_choice_values()
         for row in self.account_rows.values():
-            row["sell_cb"].configure(values=values)
-            row["farm_cb"].configure(values=values)
-            if row["sell"].get() not in values:
-                row["sell"].set("")
-            if row["farm"].get() not in values:
-                row["farm"].set(values[0] if values else "")
+            row["sell_cb"].configure(values=sell_values)
+            row["farm_cb"].configure(values=farm_values)
+            if row["sell"].get() not in sell_values or row["sell"].get().startswith("="):
+                row["sell"].set(sell_map_names()[0] if sell_map_names() else "")
+            if row["farm"].get() not in farm_values:
+                row["farm"].set(farm_values[0] if farm_values else "")
 
     def _save_account_config(self):
         data = {}
@@ -1328,6 +1339,7 @@ class TrainTab(BaseTab):
             return
         seen = set()
         values = self._coord_names()
+        sell_values = self._sell_choice_values()
         for gw, snap in infos:
             seen.add(gw.hwnd)
             row = self.account_rows.get(gw.hwnd)
@@ -1339,13 +1351,16 @@ class TrainTab(BaseTab):
                 enabled = tk.BooleanVar(value=bool(cfg.get("enabled", True)))
                 name = tk.StringVar(value=role_name)
                 display = tk.StringVar(value=role_name)
-                sell = tk.StringVar(value=str(cfg.get("sell", "")))
+                sell_default = str(cfg.get("sell", sell_map_names()[0] if sell_map_names() else ""))
+                if sell_default.startswith("=") or sell_default not in sell_values:
+                    sell_default = sell_map_names()[0] if sell_map_names() else ""
+                sell = tk.StringVar(value=sell_default)
                 farm_default = str(cfg.get("farm", values[0] if values else ""))
                 farm = tk.StringVar(value=farm_default)
                 tk.Checkbutton(frame, variable=enabled, bg=BG, command=self._save_account_config).pack(side="left")
                 name_label = tk.Label(frame, textvariable=display, bg=BG, width=14, anchor="w")
                 name_label.pack(side="left")
-                sell_cb = ttk.Combobox(frame, textvariable=sell, values=values, state="readonly", width=10)
+                sell_cb = ttk.Combobox(frame, textvariable=sell, values=sell_values, state="readonly", width=10)
                 sell_cb.pack(side="left", padx=1)
                 farm_cb = ttk.Combobox(frame, textvariable=farm, values=values, state="readonly", width=10)
                 farm_cb.pack(side="left", padx=1)
@@ -1385,7 +1400,13 @@ class TrainTab(BaseTab):
         return [row for row in self.account_rows.values() if row["enabled"].get()]
 
     def _row_coord(self, row, kind):
-        return self._coord_record(row[kind].get())
+        name = row[kind].get().strip()
+        if kind == "sell" and name in SELL_MAP_COORDS:
+            x, y = SELL_MAP_COORDS[name]
+            map_id = sell_map_id(name)
+            if map_id > 0:
+                return {"name": name, "map_name": name, "map_id": map_id, "x": x, "y": y}
+        return self._coord_record(name)
 
     @staticmethod
     def _at_coord(snapshot, coord):
