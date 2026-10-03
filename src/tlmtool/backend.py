@@ -158,6 +158,9 @@ class TlmBackend:
     def sell_bag_item_verified(self, gw: GameWindow, instance_id: int, item_id: int) -> ActionResult:
         return self._semantic(gw, lambda: self.driver.sell_bag_item_verified(gw, instance_id, item_id))
 
+    def sell_open_shop(self, gw: GameWindow, item_types: tuple[str, ...] = ("Equip",)) -> ActionResult:
+        return self._semantic(gw, lambda: self.driver.sell_open_shop(gw, item_types))
+
 
 class SemanticDriver:
     """Windows semantic bridge adapter.
