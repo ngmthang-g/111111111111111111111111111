@@ -61,6 +61,23 @@ class LocalRoleSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class BagItemSnapshot:
+    instance_id: int
+    item_id: int
+    site: int
+    position: int
+    quantity: int
+    bound: bool
+    throwable: bool
+    sellable: bool
+    is_equip: bool
+    is_weapon: bool
+    name: str = ""
+    item_type: str = ""
+    equip_type: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class AccountConfig:
     enabled: bool = False
     username: str = ""
