@@ -74,12 +74,44 @@ class StartTab(BaseTab):
     def refresh(self):
         n=len(self.backend.windows()); self.preview.config(text=f"Đã tìm thấy {n} cửa sổ game." if n else "Không tìm thấy cửa sổ game, hãy mở game trước.")
     def hide_all(self):
-        for g in self.backend.windows(): self.backend.winapi.show(g.hwnd,False)
+        windows = self.backend.windows()
+        if not windows:
+            self.app.set_status("[Ẩn] Không có cửa sổ game nào")
+            return
+        hidden = bool(getattr(self, "_windows_hidden", False))
+        if not hidden:
+            self._saved_window_rects = {}
+            for g in windows:
+                rect = self.backend.winapi.window_rect(g.hwnd)
+                if rect:
+                    self._saved_window_rects[g.hwnd] = (rect.left, rect.top, rect.width, rect.height)
+                # TLM 2.1.2 moves windows off-screen instead of SW_HIDE so
+                # Unity keeps rendering and PrintWindow/background input works.
+                self.backend.winapi.move_keep_size(g.hwnd, -2200, -2200)
+            self._windows_hidden = True
+            self.app.set_status(f"[Ẩn] Đã ẩn {len(windows)} cửa sổ game")
+        else:
+            for g in windows:
+                self.backend.winapi.move_keep_size(g.hwnd, 0, 0)
+            self._windows_hidden = False
+            self.app.set_status(f"[Ẩn] Đã hiện lại {len(windows)} cửa sổ game về (0,0)")
         self.refresh()
     def detach(self):
-        for g in self.backend.windows(): self.backend.winapi.show(g.hwnd,True)
-    def arrange(self): self.backend.winapi.arrange_grid(self.backend.windows(),self.columns.get())
-    def diagonal(self): self.backend.winapi.arrange_grid(self.backend.windows(),self.columns.get(),diagonal=True)
+        # TLM's Tách rời is a DWM preview operation, not ShowWindow.
+        self.refresh()
+        self.app.set_status("Preview tách rời đang chờ DWM thumbnail renderer.")
+    def arrange(self):
+        windows = self.backend.windows()
+        for g in windows:
+            self.backend.winapi.move_keep_size(g.hwnd, 0, 0)
+        self._windows_hidden = False
+        self.app.set_status(f"[Xếp] Đã xếp gọn {len(windows)} cửa sổ")
+    def diagonal(self):
+        windows = self.backend.windows()
+        for i, g in enumerate(windows):
+            self.backend.winapi.move_keep_size(g.hwnd, i * 50, i * 50)
+        self._windows_hidden = False
+        self.app.set_status(f"[Xếp] Đã xếp chéo {len(windows)} cửa sổ")
     def close_all(self):
         if self.backend.windows() and messagebox.askyesno("TLMTool","Đóng tất cả cửa sổ game?"):
             for g in self.backend.windows(): self.backend.winapi.close(g.hwnd)
