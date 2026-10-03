@@ -175,3 +175,19 @@ def test_bag_scan_prefers_exact_tlm_get_items_at_site_with_safe_fallback():
     assert "TryReadBagEnumerator" in text
     assert "TryReadBagByPosition" in text
     assert "GetItemsAtSite/GetItemAtSite" in text
+
+
+def test_tlm_printwindow_pixel_contract_is_present():
+    text = (Path(__file__).parents[1] / "src/tlmtool/winapi.py").read_text(encoding="utf-8")
+    assert "PrintWindow(hwnd, memory_dc, 2)" in text
+    assert "ClientToScreen" in text
+    assert "def printwindow_pixel" in text
+    assert "def check_pixel" in text
+    assert "def wait_pixel" in text
+
+
+def test_tlm_color_compare_uses_percentage_tolerance():
+    from tlmtool.winapi import WindowsApi
+    assert WindowsApi.color_compare((100, 100, 100), (100, 100, 100), 0)
+    assert WindowsApi.color_compare((95, 100, 100), (100, 100, 100), 5)
+    assert not WindowsApi.color_compare((94, 100, 100), (100, 100, 100), 5)
