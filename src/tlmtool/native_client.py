@@ -170,7 +170,7 @@ class RuntimeBridgeManager:
         if not r.ok:return None
         s=r.snapshot
         return LocalRoleSnapshot(
-            pid=gw.pid, captured_ms=int(time.time()*1000),
+            pid=gw.pid, captured_ms=int(time.time()*1000), valid_mask=int(s.validMask),
             role_id=s.roleID, name=str(s.characterName),
             level=s.level, faction_id=s.factionID, team_id=s.teamID,
             hp=s.hp, max_hp=s.maxHP,
