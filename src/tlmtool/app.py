@@ -573,16 +573,24 @@ class LoginTab(BaseTab):
             return
         tab_index, method_name = target
         self.app.notebook.select(tab_index)
+        deadline = time.monotonic() + 30.0
 
         def activate():
             tab = self.app.tabs[tab_index]
+            if mode == "Party":
+                ready = bool(getattr(tab, "_runtime", {}))
+            else:
+                ready = bool(getattr(tab, "account_rows", {}))
+            if not ready and time.monotonic() < deadline:
+                self.after(300, activate)
+                return
             method = getattr(tab, method_name, None)
             if callable(method):
                 method()
             else:
                 self.app.set_status(f"[LOGIN] {mode}: workflow đang chờ hoàn thiện.")
 
-        self.after(350, activate)
+        self.after(300, activate)
 
     def apply_schedule(self):
         for k, v in [
@@ -1016,16 +1024,21 @@ class PartyTab(BaseTab):
             return
         tab_index, method_name = target
         self.app.notebook.select(tab_index)
+        deadline = time.monotonic() + 30.0
 
         def activate():
             tab = self.app.tabs[tab_index]
+            rows = getattr(tab, "account_rows", None)
+            if rows is not None and not rows and time.monotonic() < deadline:
+                self.after(300, activate)
+                return
             method = getattr(tab, method_name, None)
             if callable(method):
                 method()
             else:
                 self.app.set_status(f"[Party] Sau khi party={mode}: workflow đang chờ hoàn thiện.")
 
-        self.after(350, activate)
+        self.after(300, activate)
 
     def stop(self):
         self._closed = True
@@ -1067,13 +1080,7 @@ class TrainTab(BaseTab):
         self.loop_spin.bind("<FocusOut>", lambda _e: self._save_config())
         button(r, "Hiện cấu hình", self._toggle_town_config, "gray").pack(side="right")
 
-        self.town_extra = tk.Frame(city, bg=BG)
         self.town_extra_visible = False
-        tk.Label(
-            self.town_extra,
-            text="Bán đồ / mua thuốc / trị liệu sẽ chỉ chạy khi primitive tương ứng đã có state proof.",
-            bg=BG, fg=GRAY, anchor="w", wraplength=400,
-        ).pack(fill="x", padx=5, pady=(0, 4))
 
         cfg = labelframe(self, "Cấu hình Train")
         cfg.pack(fill="x", padx=5, pady=2)
@@ -1152,11 +1159,10 @@ class TrainTab(BaseTab):
         self.after(100, self._refresh_accounts)
 
     def _toggle_town_config(self):
-        self.town_extra_visible = not self.town_extra_visible
-        if self.town_extra_visible:
-            self.town_extra.pack(fill="x", padx=4, pady=(0, 2))
-        else:
-            self.town_extra.pack_forget()
+        # The original TLM opens the advanced town/sell/medicine controls here.
+        # Keep the baseline button wired but fail closed until that exact panel
+        # is ported instead of inventing substitute controls.
+        self.app.set_status("[Train] Cấu hình về thành nâng cao đang chờ port 1:1.")
 
     def _add_buff_placeholder(self):
         self.app.set_status("[Train] Buff theo thời gian đang chờ port đúng runtime TLM.")
@@ -1327,11 +1333,12 @@ class TrainTab(BaseTab):
                 frame.pack(fill="x", pady=1)
                 enabled = tk.BooleanVar(value=bool(cfg.get("enabled", True)))
                 name = tk.StringVar(value=role_name)
+                display = tk.StringVar(value=role_name)
                 sell = tk.StringVar(value=str(cfg.get("sell", "")))
                 farm_default = str(cfg.get("farm", values[0] if values else ""))
                 farm = tk.StringVar(value=farm_default)
                 tk.Checkbutton(frame, variable=enabled, bg=BG, command=self._save_account_config).pack(side="left")
-                name_label = tk.Label(frame, textvariable=name, bg=BG, width=14, anchor="w")
+                name_label = tk.Label(frame, textvariable=display, bg=BG, width=14, anchor="w")
                 name_label.pack(side="left")
                 sell_cb = ttk.Combobox(frame, textvariable=sell, values=values, state="readonly", width=10)
                 sell_cb.pack(side="left", padx=1)
@@ -1339,7 +1346,7 @@ class TrainTab(BaseTab):
                 farm_cb.pack(side="left", padx=1)
                 row = {
                     "frame": frame, "gw": gw, "snapshot": snap, "enabled": enabled,
-                    "name": name, "name_label": name_label, "sell": sell, "farm": farm,
+                    "name": name, "display": display, "name_label": name_label, "sell": sell, "farm": farm,
                     "sell_cb": sell_cb, "farm_cb": farm_cb,
                 }
                 play = button(frame, "▶", lambda r=row: self._toggle_single_farm(r), "green", width=2)
@@ -1353,6 +1360,8 @@ class TrainTab(BaseTab):
                 row["snapshot"] = snap
                 if role_name and row["name"].get() != role_name:
                     row["name"].set(role_name)
+                    if gw.hwnd not in self._session_stops:
+                        row["display"].set(role_name)
             if snap:
                 row["name_label"].config(fg=GREEN if snap.map_ready else GRAY)
         for hwnd in list(self.account_rows):
@@ -1386,7 +1395,7 @@ class TrainTab(BaseTab):
     def _set_row_state(self, row, text, running=None):
         def apply():
             if row["frame"].winfo_exists():
-                row["name_label"].config(text=f'{row["name"].get()} • {text}')
+                row["display"].set(f'{row["name"].get()} • {text}')
                 if running is not None:
                     row["play"].config(text="■" if running else "▶", bg="#d12228" if running else GREEN)
         self.after(0, apply)
